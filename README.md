@@ -26,7 +26,7 @@
 |---|---|---|
 | Windows (установщик) | `Sonor-Setup-1.0.0.exe` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` после сборки |
 | Windows (портативная) | `Sonor Music Player-1.0.0-win.zip` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` |
-| Android (APK) | `sonor-apk` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или артефакт workflow **Build Android APK** |
+| Android (APK) | `Sonor-1.0.0.apk` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или артефакт workflow **Build Android APK** |
 | iOS | `.ipa` | только через EAS Build (нужен Apple Developer) |
 
 > Для телефонов собирается **APK** (Android) — формат установочного файла для мобильных. `.exe` — это формат Windows, на телефоне он не запускается.
