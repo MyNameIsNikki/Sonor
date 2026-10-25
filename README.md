@@ -16,13 +16,17 @@
 - 🪟 Установщик Windows (NSIS) + портативный ZIP
 - 🤖 Сборка Android APK через GitHub Actions
 
+## Скачать
+
+Готовые файлы для Windows и Android: **[github.com/MyNameIsNikki/Sonor/releases/latest](https://github.com/MyNameIsNikki/Sonor/releases/latest)**
+
 ## Готовые сборки
 
 | Платформа | Файл | Где взять |
 |---|---|---|
-| Windows (установщик) | `Sonor-Setup-1.0.0.exe` | папка `release/` после сборки или GitHub Releases |
-| Windows (портативная) | `Sonor Music Player-1.0.0-win.zip` | папка `release/` или GitHub Releases |
-| Android (APK) | `sonor-apk` | артефакт workflow **Build Android APK** в GitHub Actions |
+| Windows (установщик) | `Sonor-Setup-1.0.0.exe` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` после сборки |
+| Windows (портативная) | `Sonor Music Player-1.0.0-win.zip` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` |
+| Android (APK) | `sonor-apk` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или артефакт workflow **Build Android APK** |
 | iOS | `.ipa` | только через EAS Build (нужен Apple Developer) |
 
 > Для телефонов собирается **APK** (Android) — формат установочного файла для мобильных. `.exe` — это формат Windows, на телефоне он не запускается.
