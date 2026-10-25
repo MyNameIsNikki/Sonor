@@ -37,6 +37,9 @@ jobs:
       - name: Generate native Android project
         run: npx expo prebuild --platform android --clean --no-install
 
+      - name: Patch native Gradle files
+        run: node scripts/patch-android-gradle.js
+
       - name: Build APK
         working-directory: android
         run: |

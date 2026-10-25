@@ -12,6 +12,8 @@ npm-debug.log*
 release/
 dist/
 build/installer.nsi.disabled
+android/
+ios/
 android/app/build/
 android/.gradle/
 android/build/
