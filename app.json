@@ -1,0 +1,37 @@
+{
+ "expo": {
+ "name": "Sonor",
+ "slug": "sonor",
+ "version": "1.0.0",
+ "description": "Music player with VK Music, Yandex Music, and Spotify imports in blue theme",
+ "orientation": "portrait",
+ "icon": "./icon.png",
+ "userInterfaceStyle": "dark",
+ "splash": {
+ "image": "./splash.png",
+ "backgroundColor": "#0f2027"
+ },
+ "updates": {
+ "fallbackToCacheTimeout": 0
+ },
+ "assetBundlePatterns": ["**/*"],
+ "ios": {
+ "bundleIdentifier": "com.sonor.music",
+ "buildNumber": "1.0.0",
+ "infoPlist": {
+ "NSCameraUsageDescription": "Это приложение не использует камеру",
+ "NSMicrophoneUsageDescription": "Это приложение использует микрофон для записи аудио"
+ }
+ },
+ "android": {
+ "package": "com.sonor.music",
+ "versionCode": 1,
+ "permissions": ["READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE", "READ_MEDIA_AUDIO"]
+ },
+ "web": {
+ "favicon": {
+ "input": "./icon.png"
+ }
+ }
+ }
+}

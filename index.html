@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sonor — Музыкальный плеер</title>
+<style>
+  :root {
+    --bg-0: #08151c;
+    --bg-1: #0f2027;
+    --bg-2: #17323f;
+    --bg-3: #1e4152;
+    --glass: rgba(255, 255, 255, 0.05);
+    --glass-strong: rgba(255, 255, 255, 0.09);
+    --stroke: rgba(160, 212, 235, 0.16);
+    --text: #eaf6fb;
+    --muted: #93b4c4;
+    --accent: #00d4ff;
+    --accent-2: #4facfe;
+    --danger: #ff6b81;
+    --radius: 16px;
+    --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", "Inter", Tahoma, sans-serif;
+    color: var(--text);
+    background:
+      radial-gradient(900px 600px at 8% -10%, rgba(0, 212, 255, 0.18), transparent 60%),
+      radial-gradient(800px 600px at 100% 0%, rgba(79, 172, 254, 0.14), transparent 55%),
+      linear-gradient(150deg, var(--bg-1) 0%, var(--bg-2) 48%, var(--bg-3) 100%);
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ---------- Title bar ---------- */
+  .titlebar {
+    height: 46px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 8px 0 18px;
+    -webkit-app-region: drag;
+    background: rgba(6, 18, 24, 0.55);
+    border-bottom: 1px solid var(--stroke);
+  }
+  .titlebar .dot {
+    width: 26px; height: 26px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--accent-2), var(--accent));
+    display: grid; place-items: center;
+    color: #04222b; font-size: 14px; font-weight: 800;
+    box-shadow: 0 0 18px rgba(0, 212, 255, 0.45);
+  }
+  .titlebar .name { font-weight: 600; letter-spacing: 0.4px; font-size: 13.5px; }
+  .titlebar .name span { color: var(--accent); }
+  .titlebar .spacer { flex: 1; }
+  .win-actions { display: flex; gap: 4px; -webkit-app-region: no-drag; }
+  .win-btn {
+    width: 40px; height: 30px; border: 0; border-radius: 8px;
+    background: transparent; color: var(--muted);
+    font-size: 14px; cursor: pointer; transition: 0.15s;
+  }
+  .win-btn:hover { background: var(--glass-strong); color: var(--text); }
+  .win-btn.close:hover { background: #d93b52; color: #fff; }
+
+  /* ---------- Layout ---------- */
+  .app { display: flex; flex-direction: column; height: calc(100% - 46px); min-height: 0; }
+  .shell { display: flex; flex: 1; min-height: 0; }
+
+  .sidebar {
+    width: 232px;
+    padding: 22px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 26px;
+    border-right: 1px solid var(--stroke);
+    background: rgba(5, 16, 21, 0.35);
+    backdrop-filter: blur(14px);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; padding: 0 6px; }
+  .brand .logo {
+    width: 42px; height: 42px; border-radius: 14px;
+    background: linear-gradient(135deg, var(--accent-2), var(--accent));
+    display: grid; place-items: center; font-size: 21px;
+    box-shadow: 0 10px 28px rgba(0, 212, 255, 0.32);
+  }
+  .brand h1 { margin: 0; font-size: 19px; letter-spacing: 1.6px; }
+  .brand p { margin: 2px 0 0; font-size: 11px; color: var(--muted); letter-spacing: 0.6px; }
+
+  .nav { display: flex; flex-direction: column; gap: 6px; }
+  .nav-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 1.4px; color: var(--muted); padding: 0 10px 5px; }
+  .nav-btn {
+    display: flex; align-items: center; gap: 11px;
+    padding: 11px 12px; border: 0; border-radius: 12px;
+    background: transparent; color: var(--muted);
+    font-size: 13.5px; font-weight: 500; text-align: left; cursor: pointer;
+    transition: 0.18s;
+  }
+  .nav-btn .ico { font-size: 16px; width: 20px; text-align: center; }
+  .nav-btn:hover { background: var(--glass); color: var(--text); }
+  .nav-btn.active {
+    background: linear-gradient(120deg, rgba(0, 212, 255, 0.2), rgba(79, 172, 254, 0.08));
+    color: #fff;
+    box-shadow: inset 0 0 0 1px rgba(0, 212, 255, 0.35);
+  }
+  .nav-btn .count {
+    margin-left: auto; font-size: 11px; padding: 2px 8px;
+    border-radius: 999px; background: var(--glass-strong); color: var(--accent);
+  }
+
+  .tip {
+    margin-top: auto; padding: 14px;
+    border-radius: 14px; border: 1px solid var(--stroke);
+    background: var(--glass); font-size: 11.5px; line-height: 1.5; color: var(--muted);
+  }
+  .tip b { color: var(--accent); font-weight: 600; }
+
+  /* ---------- Main ---------- */
+  main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 24px 28px 18px; overflow: hidden; }
+  .view { display: none; flex-direction: column; min-height: 0; height: 100%; }
+  .view.active { display: flex; animation: fade 0.25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  .view-head { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 18px; }
+  .view-head h2 { margin: 0; font-size: 26px; letter-spacing: 0.3px; }
+  .view-head p { margin: 5px 0 0; font-size: 12.5px; color: var(--muted); }
+  .view-head .grow { flex: 1; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid var(--stroke); border-radius: 11px;
+    padding: 10px 15px; font-size: 12.5px; font-weight: 600;
+    background: var(--glass); color: var(--text); cursor: pointer; transition: 0.18s;
+  }
+  .btn:hover { background: var(--glass-strong); border-color: rgba(0, 212, 255, 0.35); }
+  .btn.primary {
+    border: 0; color: #032730;
+    background: linear-gradient(120deg, var(--accent-2), var(--accent));
+    box-shadow: 0 10px 26px rgba(0, 212, 255, 0.28);
+  }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.ghost-danger:hover { border-color: rgba(255, 107, 129, 0.5); color: var(--danger); }
+
+  .search {
+    display: flex; align-items: center; gap: 9px;
+    border: 1px solid var(--stroke); border-radius: 11px;
+    background: rgba(3, 14, 19, 0.45); padding: 9px 13px; min-width: 240px;
+  }
+  .search input {
+    border: 0; outline: 0; background: transparent; color: var(--text);
+    font-size: 12.5px; width: 100%;
+  }
+  .search input::placeholder { color: #6f93a3; }
+  .search span { color: var(--muted); font-size: 14px; }
+
+  /* Track list */
+  .list-wrap {
+    flex: 1; min-height: 0; overflow-y: auto;
+    border: 1px solid var(--stroke); border-radius: var(--radius);
+    background: rgba(4, 15, 20, 0.32);
+  }
+  .list-wrap::-webkit-scrollbar { width: 9px; }
+  .list-wrap::-webkit-scrollbar-thumb { background: rgba(0, 212, 255, 0.22); border-radius: 999px; }
+  .list-wrap::-webkit-scrollbar-track { background: transparent; }
+
+  .row {
+    display: grid;
+    grid-template-columns: 42px 1fr 130px 64px 40px;
+    align-items: center; gap: 12px;
+    padding: 11px 16px;
+    border-bottom: 1px solid rgba(160, 212, 235, 0.07);
+    cursor: pointer; transition: background 0.15s;
+  }
+  .row:last-child { border-bottom: 0; }
+  .row:hover { background: var(--glass); }
+  .row.playing { background: linear-gradient(90deg, rgba(0, 212, 255, 0.16), transparent 70%); }
+  .row.playing .r-title { color: var(--accent); }
+  .r-num { font-size: 12px; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
+  .row.playing .r-num { color: var(--accent); }
+  .r-main { min-width: 0; display: flex; align-items: center; gap: 11px; }
+  .r-cover {
+    width: 34px; height: 34px; border-radius: 9px; flex: 0 0 auto;
+    background: linear-gradient(135deg, #123542, #1f5c74);
+    display: grid; place-items: center; font-size: 14px; color: var(--accent);
+    overflow: hidden;
+  }
+  .r-cover img { width: 100%; height: 100%; object-fit: cover; }
+  .r-text { min-width: 0; }
+  .r-title { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .r-artist { font-size: 11.5px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .r-source { font-size: 10.5px; padding: 3px 9px; border-radius: 999px; justify-self: start; letter-spacing: 0.4px; }
+  .src-local { background: rgba(0, 212, 255, 0.12); color: var(--accent); }
+  .src-vk { background: rgba(79, 172, 254, 0.14); color: #7cc7ff; }
+  .src-yandex { background: rgba(255, 204, 0, 0.12); color: #ffd75e; }
+  .src-spotify { background: rgba(29, 185, 84, 0.13); color: #57d97f; }
+  .r-dur { font-size: 11.5px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+  .r-del {
+    border: 0; background: transparent; color: #6f93a3;
+    font-size: 15px; cursor: pointer; border-radius: 8px; height: 28px; opacity: 0;
+    transition: 0.15s;
+  }
+  .row:hover .r-del { opacity: 1; }
+  .r-del:hover { color: var(--danger); background: rgba(255, 107, 129, 0.12); }
+
+  .empty {
+    height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; color: var(--muted); text-align: center; padding: 30px;
+  }
+  .empty .big { font-size: 46px; filter: drop-shadow(0 0 22px rgba(0, 212, 255, 0.35)); }
+  .empty h3 { margin: 0; color: var(--text); font-size: 17px; }
+  .empty p { margin: 0; font-size: 12.5px; max-width: 360px; line-height: 1.6; }
+
+  /* Import view */
+  .import-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card {
+    position: relative; overflow: hidden;
+    border: 1px solid var(--stroke); border-radius: var(--radius);
+    background: rgba(6, 20, 27, 0.55); padding: 20px;
+    display: flex; flex-direction: column; gap: 13px;
+  }
+  .card::before {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 3px;
+    background: var(--brand, var(--accent));
+  }
+  .card.vk { --brand: linear-gradient(90deg, #4facfe, #00f2fe); }
+  .card.yandex { --brand: linear-gradient(90deg, #ffd75e, #ffb300); }
+  .card.spotify { --brand: linear-gradient(90deg, #1db954, #1ed760); }
+  .card h3 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 9px; }
+  .card .sub { margin: 0; font-size: 11.5px; color: var(--muted); line-height: 1.5; min-height: 34px; }
+  .field {
+    display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--stroke); border-radius: 10px;
+    background: rgba(2, 11, 15, 0.55); padding: 9px 11px;
+  }
+  .field input {
+    flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
+    color: var(--text); font-size: 12px; font-family: inherit;
+  }
+  .field input::placeholder { color: #628695; }
+  .eye { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; }
+  .card .btn { justify-content: center; }
+  .card-status { font-size: 11px; min-height: 15px; color: var(--muted); }
+  .card-status.err { color: var(--danger); }
+  .card-status.ok { color: #57d97f; }
+  .spin {
+    width: 13px; height: 13px; border-radius: 50%;
+    border: 2px solid rgba(0, 212, 255, 0.25); border-top-color: var(--accent);
+    animation: spin 0.8s linear infinite; display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .dropzone {
+    margin-top: 16px; border: 1.5px dashed rgba(160, 212, 235, 0.25);
+    border-radius: var(--radius); padding: 16px; text-align: center;
+    color: var(--muted); font-size: 12px; transition: 0.2s;
+  }
+  .dropzone.hot { border-color: var(--accent); background: rgba(0, 212, 255, 0.07); color: var(--accent); }
+
+  /* ---------- Player ---------- */
+  .player {
+    height: 92px; flex: 0 0 auto;
+    display: flex; align-items: center; gap: 18px;
+    padding: 0 24px;
+    border-top: 1px solid var(--stroke);
+    background: rgba(4, 14, 19, 0.72);
+    backdrop-filter: blur(18px);
+  }
+  .np { display: flex; align-items: center; gap: 13px; width: 280px; min-width: 0; }
+  .np-cover {
+    width: 54px; height: 54px; border-radius: 13px; flex: 0 0 auto;
+    background: linear-gradient(135deg, #123542, #1f5c74);
+    display: grid; place-items: center; font-size: 21px; color: var(--accent);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+  }
+  .np-text { min-width: 0; }
+  .np-title { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .np-artist { font-size: 11.5px; color: var(--muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .center-controls { flex: 1; max-width: 620px; margin: 0 auto; display: flex; flex-direction: column; gap: 7px; }
+  .controls { display: flex; align-items: center; justify-content: center; gap: 14px; }
+  .ctrl {
+    width: 38px; height: 38px; border: 0; border-radius: 50%;
+    background: transparent; color: var(--text); font-size: 16px; cursor: pointer;
+    transition: 0.15s; display: grid; place-items: center;
+  }
+  .ctrl:hover { background: var(--glass-strong); }
+  .ctrl.play {
+    width: 46px; height: 46px; color: #032730;
+    background: linear-gradient(135deg, var(--accent-2), var(--accent));
+    box-shadow: 0 8px 24px rgba(0, 212, 255, 0.35);
+    font-size: 18px;
+  }
+  .ctrl.play:hover { filter: brightness(1.1); }
+  .ctrl:disabled { opacity: 0.35; cursor: default; }
+
+  .seek-row { display: flex; align-items: center; gap: 10px; }
+  .time { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; width: 38px; }
+  .time.right { text-align: right; }
+
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none; width: 100%;
+    height: 4px; border-radius: 999px; outline: 0; cursor: pointer;
+    background: linear-gradient(90deg, var(--accent) var(--p, 0%), rgba(160, 212, 235, 0.18) var(--p, 0%));
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
+    background: #fff; box-shadow: 0 0 10px rgba(0, 212, 255, 0.85);
+  }
+
+  .volume { display: flex; align-items: center; gap: 9px; width: 150px; justify-content: flex-end; }
+  .volume span { font-size: 14px; color: var(--muted); }
+  .volume input { width: 92px; --p: 80%; }
+
+  /* Toast */
+  .toasts { position: fixed; right: 22px; bottom: 108px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
+  .toast {
+    padding: 11px 15px; border-radius: 11px; font-size: 12px;
+    background: rgba(8, 27, 35, 0.94); border: 1px solid rgba(0, 212, 255, 0.35);
+    color: var(--text); box-shadow: var(--shadow);
+    animation: slide 0.25s ease;
+  }
+  .toast.err { border-color: rgba(255, 107, 129, 0.5); }
+  @keyframes slide { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+  <div class="titlebar">
+    <div class="dot">♪</div>
+    <div class="name">SON<span>O</span>R</div>
+    <div class="spacer"></div>
+    <div class="win-actions">
+      <button class="win-btn" id="btn-min" title="Свернуть">‒</button>
+      <button class="win-btn" id="btn-max" title="Развернуть">□</button>
+      <button class="win-btn close" id="btn-close" title="Закрыть">✕</button>
+    </div>
+  </div>
+
+  <div class="app">
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="logo">♪</div>
+          <div>
+            <h1>SONOR</h1>
+            <p>MUSIC PLAYER</p>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <div class="nav-label">Медиатека</div>
+          <button class="nav-btn active" data-view="library">
+            <span class="ico">☰</span> Библиотека
+            <span class="count" id="nav-count">0</span>
+          </button>
+          <button class="nav-btn" data-view="import">
+            <span class="ico">⇩</span> Импорт музыки
+          </button>
+        </nav>
+
+        <div class="tip">
+          <b>Совет.</b> Перетащите аудиофайлы прямо в окно или нажмите
+          «Добавить файлы». Импорт из VK, Яндекс Музыки и Spotify — на вкладке
+          «Импорт музыки».
+        </div>
+      </aside>
+
+      <main>
+        <section class="view active" id="view-library">
+          <div class="view-head">
+            <div>
+              <h2>Библиотека</h2>
+              <p id="lib-sub">Ваша коллекция треков</p>
+            </div>
+            <div class="grow"></div>
+            <div class="search">
+              <span>⌕</span>
+              <input id="search" type="text" placeholder="Поиск трека или исполнителя…" />
+            </div>
+            <button class="btn primary" id="btn-add">＋ Добавить файлы</button>
+          </div>
+
+          <div class="list-wrap" id="list-wrap">
+            <div class="empty" id="empty-state">
+              <div class="big">🎧</div>
+              <h3>Пока пусто</h3>
+              <p>Добавьте локальные аудиофайлы или импортируйте музыку из VK, Яндекс Музыки и Spotify.</p>
+            </div>
+            <div id="rows"></div>
+          </div>
+
+          <div class="dropzone" id="dropzone">Перетащите аудиофайлы сюда — MP3, FLAC, WAV, M4A, OGG</div>
+        </section>
+
+        <section class="view" id="view-import">
+          <div class="view-head">
+            <div>
+              <h2>Импорт музыки</h2>
+              <p>Вставьте токен доступа — треки появятся в библиотеке</p>
+            </div>
+          </div>
+
+          <div class="import-grid">
+            <div class="card vk">
+              <h3>🅥 VK Музыка</h3>
+              <p class="sub">Токен доступа VK с правами на аудио (scope: audio).</p>
+              <div class="field">
+                <input type="password" id="vk-token" placeholder="access_token" />
+                <button class="eye" data-eye="vk-token">👁</button>
+              </div>
+              <button class="btn" id="vk-import">Импортировать VK</button>
+              <div class="card-status" id="vk-status"></div>
+            </div>
+
+            <div class="card yandex">
+              <h3>🅨 Яндекс Музыка</h3>
+              <p class="sub">OAuth-токен Яндекс Музыки для чтения плейлистов.</p>
+              <div class="field">
+                <input type="password" id="ya-token" placeholder="OAuth token" />
+                <button class="eye" data-eye="ya-token">👁</button>
+              </div>
+              <button class="btn" id="ya-import">Импортировать Яндекс</button>
+              <div class="card-status" id="ya-status"></div>
+            </div>
+
+            <div class="card spotify">
+              <h3>🅢 Spotify</h3>
+              <p class="sub">Access token Spotify (playlist-read-private, user-library-read).</p>
+              <div class="field">
+                <input type="password" id="sp-token" placeholder="Bearer token" />
+                <button class="eye" data-eye="sp-token">👁</button>
+              </div>
+              <button class="btn" id="sp-import">Импортировать Spotify</button>
+              <div class="card-status" id="sp-status"></div>
+            </div>
+          </div>
+
+          <div class="dropzone" style="margin-top: 18px">
+            Импортируются названия, исполнители и превью-ссылки. Для локального
+            воспроизведения добавьте файлы на вкладке «Библиотека».
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="player">
+      <div class="np">
+        <div class="np-cover" id="np-cover">♪</div>
+        <div class="np-text">
+          <div class="np-title" id="np-title">Ничего не играет</div>
+          <div class="np-artist" id="np-artist">Выберите трек</div>
+        </div>
+      </div>
+
+      <div class="center-controls">
+        <div class="controls">
+          <button class="ctrl" id="btn-prev" title="Предыдущий">⏮</button>
+          <button class="ctrl play" id="btn-play" title="Играть">▶</button>
+          <button class="ctrl" id="btn-next" title="Следующий">⏭</button>
+        </div>
+        <div class="seek-row">
+          <span class="time" id="t-cur">0:00</span>
+          <input type="range" id="seek" min="0" max="100" value="0" step="0.1" />
+          <span class="time right" id="t-dur">0:00</span>
+        </div>
+      </div>
+
+      <div class="volume">
+        <span id="vol-icon">🔊</span>
+        <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" />
+      </div>
+    </footer>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+  <input type="file" id="file-input" accept="audio/*" multiple hidden />
+  <audio id="audio"></audio>
+
+<script>
+(function () {
+  "use strict";
+
+  var ipc = null;
+  try { ipc = require("electron").ipcRenderer; } catch (e) { ipc = null; }
+
+  // ---------- Window controls ----------
+  function wire(id, channel) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("click", function () {
+      if (ipc) ipc.send(channel);
+    });
+  }
+  wire("btn-min", "minimize-window");
+  wire("btn-max", "maximize-window");
+  wire("btn-close", "close-window");
+
+  // ---------- State ----------
+  var tracks = [];
+  var current = -1;
+  var filtered = [];
+
+  var audio = document.getElementById("audio");
+  audio.volume = 0.8;
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function fmt(sec) {
+    if (!isFinite(sec) || sec < 0) sec = 0;
+    var m = Math.floor(sec / 60);
+    var s = Math.floor(sec % 60);
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  function toast(msg, isErr) {
+    var box = $("toasts");
+    var t = document.createElement("div");
+    t.className = "toast" + (isErr ? " err" : "");
+    t.textContent = msg;
+    box.appendChild(t);
+    setTimeout(function () {
+      t.style.opacity = "0";
+      t.style.transform = "translateX(18px)";
+      t.style.transition = "0.25s";
+      setTimeout(function () { t.remove(); }, 300);
+    }, 3200);
+  }
+
+  // ---------- Library ----------
+  function prettyName(name) {
+    var base = name.replace(/\.[^.]+$/, "").replace(/_/g, " ").trim();
+    var dash = base.split(/\s+-\s+/);
+    if (dash.length >= 2) return { artist: dash[0], title: dash.slice(1).join(" - ") };
+    return { artist: "Неизвестный исполнитель", title: base };
+  }
+
+  function addFiles(fileList) {
+    var added = 0;
+    Array.prototype.forEach.call(fileList, function (file) {
+      if (!file.type || file.type.indexOf("audio") !== 0) return;
+      var meta = prettyName(file.name);
+      tracks.push({
+        id: "local_" + Date.now() + "_" + Math.random().toString(36).slice(2),
+        title: meta.title,
+        artist: meta.artist,
+        album: "",
+        src: URL.createObjectURL(file),
+        duration: 0,
+        source: "local"
+      });
+      added++;
+    });
+    if (!added) { toast("Аудиофайлы не найдены", true); return; }
+    render();
+    toast("Добавлено треков: " + added);
+    if (current === -1 && tracks.length) playAt(0);
+  }
+
+  function render() {
+    var q = ($("search").value || "").toLowerCase().trim();
+    filtered = tracks.filter(function (t) {
+      return !q || (t.title + " " + t.artist).toLowerCase().indexOf(q) !== -1;
+    });
+
+    var rows = $("rows");
+    rows.innerHTML = "";
+    $("empty-state").style.display = filtered.length ? "none" : "flex";
+    $("nav-count").textContent = tracks.length;
+    $("lib-sub").textContent = tracks.length
+      ? "Треков в коллекции: " + tracks.length
+      : "Ваша коллекция треков";
+
+    filtered.forEach(function (t, i) {
+      var row = document.createElement("div");
+      row.className = "row" + (t === tracks[current] ? " playing" : "");
+
+      var num = document.createElement("div");
+      num.className = "r-num";
+      num.textContent = t === tracks[current] ? "▶" : String(i + 1);
+
+      var main = document.createElement("div");
+      main.className = "r-main";
+      var cover = document.createElement("div");
+      cover.className = "r-cover";
+      if (t.image) {
+        var img = document.createElement("img");
+        img.src = t.image;
+        cover.appendChild(img);
+      } else {
+        cover.textContent = "♪";
+      }
+      var text = document.createElement("div");
+      text.className = "r-text";
+      var titleEl = document.createElement("div");
+      titleEl.className = "r-title";
+      titleEl.textContent = t.title;
+      var artistEl = document.createElement("div");
+      artistEl.className = "r-artist";
+      artistEl.textContent = t.artist + (t.album ? " • " + t.album : "");
+      text.appendChild(titleEl);
+      text.appendChild(artistEl);
+      main.appendChild(cover);
+      main.appendChild(text);
+
+      var src = document.createElement("span");
+      src.className = "r-source src-" + t.source;
+      src.textContent = { local: "ЛОКАЛЬНО", vk: "VK", yandex: "ЯНДЕКС", spotify: "SPOTIFY" }[t.source] || t.source;
+
+      var dur = document.createElement("div");
+      dur.className = "r-dur";
+      dur.textContent = t.duration ? fmt(t.duration) : "—";
+
+      var del = document.createElement("button");
+      del.className = "r-del";
+      del.textContent = "✕";
+      del.title = "Удалить";
+      del.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var idx = tracks.indexOf(t);
+        if (idx === current) { audio.pause(); current = -1; updateNowPlaying(); }
+        else if (idx < current) current--;
+        tracks.splice(idx, 1);
+        render();
+      });
+
+      row.appendChild(num);
+      row.appendChild(main);
+      row.appendChild(src);
+      row.appendChild(dur);
+      row.appendChild(del);
+      row.addEventListener("dblclick", function () { playTrack(t); });
+      row.addEventListener("click", function () { playTrack(t); });
+      rows.appendChild(row);
+    });
+  }
+
+  function updateNowPlaying() {
+    var t = tracks[current];
+    $("np-title").textContent = t ? t.title : "Ничего не играет";
+    $("np-artist").textContent = t ? t.artist : "Выберите трек";
+    $("np-cover").innerHTML = "";
+    if (t && t.image) {
+      var img = document.createElement("img");
+      img.src = t.image;
+      img.style.width = "100%";
+      img.style.height = "100%";
+      img.style.objectFit = "cover";
+      $("np-cover").appendChild(img);
+    } else {
+      $("np-cover").textContent = "♪";
+    }
+    $("btn-play").textContent = audio.paused ? "▶" : "⏸";
+    render();
+  }
+
+  function playTrack(t) {
+    current = tracks.indexOf(t);
+    if (current < 0) return;
+    if (!t.src) {
+      toast("У трека нет ссылки для воспроизведения", true);
+      updateNowPlaying();
+      return;
+    }
+    audio.src = t.src;
+    var p = audio.play();
+    if (p && p.catch) p.catch(function () { toast("Не удалось воспроизвести трек", true); });
+    updateNowPlaying();
+  }
+
+  function playAt(i) {
+    if (i < 0 || i >= tracks.length) return;
+    playTrack(tracks[i]);
+  }
+
+  $("btn-play").addEventListener("click", function () {
+    if (!tracks.length) return;
+    if (current === -1) { playAt(0); return; }
+    if (audio.paused) audio.play(); else audio.pause();
+    updateNowPlaying();
+  });
+  $("btn-next").addEventListener("click", function () {
+    if (!tracks.length) return;
+    playAt((current + 1) % tracks.length);
+  });
+  $("btn-prev").addEventListener("click", function () {
+    if (!tracks.length) return;
+    if (audio.currentTime > 3) { audio.currentTime = 0; return; }
+    playAt((current - 1 + tracks.length) % tracks.length);
+  });
+
+  audio.addEventListener("play", function () { $("btn-play").textContent = "⏸"; });
+  audio.addEventListener("pause", function () { $("btn-play").textContent = "▶"; });
+  audio.addEventListener("ended", function () {
+    if (tracks.length) playAt((current + 1) % tracks.length);
+  });
+  audio.addEventListener("loadedmetadata", function () {
+    var t = tracks[current];
+    if (t) t.duration = audio.duration;
+    $("t-dur").textContent = fmt(audio.duration);
+  });
+  audio.addEventListener("timeupdate", function () {
+    var d = audio.duration || 0;
+    var pct = d ? (audio.currentTime / d) * 100 : 0;
+    var seek = $("seek");
+    seek.value = pct;
+    seek.style.setProperty("--p", pct + "%");
+    $("t-cur").textContent = fmt(audio.currentTime);
+    $("t-dur").textContent = fmt(d);
+  });
+
+  $("seek").addEventListener("input", function () {
+    if (!audio.duration) return;
+    audio.currentTime = (this.value / 100) * audio.duration;
+    this.style.setProperty("--p", this.value + "%");
+  });
+
+  $("volume").addEventListener("input", function () {
+    audio.volume = Number(this.value);
+    this.style.setProperty("--p", this.value * 100 + "%");
+    $("vol-icon").textContent = audio.volume === 0 ? "🔇" : audio.volume < 0.5 ? "🔉" : "🔊";
+  });
+  $("volume").style.setProperty("--p", "80%");
+
+  $("btn-add").addEventListener("click", function () { $("file-input").click(); });
+  $("file-input").addEventListener("change", function () {
+    addFiles(this.files);
+    this.value = "";
+  });
+  $("search").addEventListener("input", render);
+
+  // Drag & drop
+  var dz = $("dropzone");
+  ["dragenter", "dragover"].forEach(function (ev) {
+    document.addEventListener(ev, function (e) {
+      e.preventDefault();
+      dz.classList.add("hot");
+    });
+  });
+  ["dragleave", "drop"].forEach(function (ev) {
+    document.addEventListener(ev, function (e) {
+      e.preventDefault();
+      if (ev === "dragleave" && e.relatedTarget) return;
+      dz.classList.remove("hot");
+    });
+  });
+  document.addEventListener("drop", function (e) {
+    e.preventDefault();
+    if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+  });
+
+  // ---------- Views ----------
+  document.querySelectorAll(".nav-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      document.querySelectorAll(".nav-btn").forEach(function (b) { b.classList.remove("active"); });
+      btn.classList.add("active");
+      document.querySelectorAll(".view").forEach(function (v) { v.classList.remove("active"); });
+      $("view-" + btn.dataset.view).classList.add("active");
+    });
+  });
+
+  document.querySelectorAll(".eye").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var inp = $(b.dataset.eye);
+      inp.type = inp.type === "password" ? "text" : "password";
+    });
+  });
+
+  // ---------- Import ----------
+  function setStatus(id, text, kind) {
+    var el = $(id);
+    el.className = "card-status" + (kind ? " " + kind : "");
+    el.innerHTML = text;
+  }
+
+  function importTracks(service, token, statusId, btn) {
+    if (!token) { setStatus(statusId, "Введите токен доступа", "err"); return; }
+    if (!ipc) { setStatus(statusId, "Импорт доступен только в приложении", "err"); return; }
+
+    btn.disabled = true;
+    setStatus(statusId, '<span class="spin"></span> Импортируем…');
+
+    ipc.invoke("import-music", { service: service, token: token })
+      .then(function (result) {
+        var added = 0;
+        (result.tracks || []).forEach(function (t) {
+          t.id = t.id || service + "_" + Math.random().toString(36).slice(2);
+          t.src = t.url || null;
+          t.source = service;
+          tracks.push(t);
+          added++;
+        });
+        render();
+        if (result.warning) setStatus(statusId, result.warning, "err");
+        else setStatus(statusId, "Импортировано: " + added, "ok");
+        if (added) toast("Импортировано треков: " + added);
+      })
+      .catch(function (err) {
+        setStatus(statusId, String(err && err.message ? err.message : err), "err");
+      })
+      .then(function () { btn.disabled = false; });
+  }
+
+  $("vk-import").addEventListener("click", function () {
+    importTracks("vk", $("vk-token").value.trim(), "vk-status", this);
+  });
+  $("ya-import").addEventListener("click", function () {
+    importTracks("yandex", $("ya-token").value.trim(), "ya-status", this);
+  });
+  $("sp-import").addEventListener("click", function () {
+    importTracks("spotify", $("sp-token").value.trim(), "sp-status", this);
+  });
+
+  // Space toggles playback unless typing
+  document.addEventListener("keydown", function (e) {
+    var tag = (document.activeElement && document.activeElement.tagName) || "";
+    if (e.code === "Space" && tag !== "INPUT" && tag !== "TEXTAREA") {
+      e.preventDefault();
+      $("btn-play").click();
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

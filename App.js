@@ -26,26 +26,41 @@ export default function App() {
  const [tracks, setTracks] = useState([]);
  const [showImport, setShowImport] = useState(false);
  const [isLoading, setIsLoading] = useState(false);
+ const [position, setPosition] = useState(0);
+ const [duration, setDuration] = useState(0);
 
  // Load saved tracks on app start
  useEffect(() => {
  loadSavedTracks();
- return sound;
  }, []);
+
+ // Release the audio player when the sound changes or the app unmounts
+ useEffect(() => {
+ return () => {
+ if (sound) {
+ sound.unloadAsync().catch(() => {});
+ }
+ };
+ }, [sound]);
 
  const loadSavedTracks = async () => {
  try {
+ const permission = await MediaLibrary.requestPermissionsAsync();
+ if (!permission.granted) {
+ return;
+ }
  const savedTracks = await MediaLibrary.getAssetsAsync({
  mediaType: 'audio',
  first: 100,
  });
  if (savedTracks.assets.length > 0) {
- setTracks(savedTracks.assets.map((asset, index) => ({
+ setTracks(savedTracks.assets.map((asset) => ({
  id: asset.id,
  title: asset.filename,
- artist: 'Local Track',
- duration: asset.duration,
- uri: asset.uri
+ artist: 'Локальный трек',
+ duration: (asset.duration || 0) * 1000,
+ uri: asset.uri,
+ source: 'local'
  })));
  }
  } catch (error) {
@@ -63,22 +78,52 @@ export default function App() {
  try {
  // Stop previous sound
  if (sound) {
- await sound.unloadAsync();
+ await sound.unloadAsync().catch(() => {});
  }
- 
+
+ const uri = track.uri || track.url;
+ if (!uri) {
+ Alert.alert('Нет ссылки', 'У этого трека нет прямой ссылки для воспроизведения. Попробуйте добавить локальный файл.');
+ return;
+ }
+
  // Play new track
  const { sound: newSound } = await Audio.Sound.createAsync(
- { uri: track.uri },
+ { uri },
  { shouldPlay: true }
  );
- 
+
+ newSound.setOnPlaybackStatusUpdate((status) => {
+ if (status.isLoaded) {
+ setPosition(status.positionMillis || 0);
+ setDuration(status.durationMillis || 0);
+ setIsPlaying(!!status.isPlaying);
+ }
+ });
+
  setSound(newSound);
  setIsPlaying(true);
  setCurrentTrack(track);
+ setPosition(0);
+ setDuration(track.duration || 0);
  } catch (error) {
  console.error('Error playing track:', error);
  Alert.alert('Ошибка', 'Не удалось воспроизвести трек');
  }
+ };
+
+ const playAdjacent = async (direction) => {
+ if (!tracks.length) return;
+ const index = currentTrack
+ ? tracks.findIndex((item) => item.id === currentTrack.id)
+ : -1;
+ let nextIndex;
+ if (index === -1) {
+ nextIndex = direction > 0 ? 0 : tracks.length - 1;
+ } else {
+ nextIndex = (index + direction + tracks.length) % tracks.length;
+ }
+ await handlePlayTrack(tracks[nextIndex]);
  };
 
  const togglePlayback = async () => {
@@ -142,6 +187,10 @@ export default function App() {
  track={currentTrack}
  isPlaying={isPlaying}
  onToggle={togglePlayback}
+ onNext={() => playAdjacent(1)}
+ onPrevious={() => playAdjacent(-1)}
+ position={position}
+ duration={duration}
  />
  </View>
  )}

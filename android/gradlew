@@ -1,0 +1,5 @@
+#!/bin/bash
+# Android Gradle Wrapper
+# This enables you to run Android commands from any directory
+echo "Starting Android build..."
+cd "$(dirname "$0")"

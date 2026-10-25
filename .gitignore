@@ -3,5 +3,24 @@ node_modules/
 npm-debug.log*
 .expo/
 .expo-shared/
+.eas/
 .DS_Store
 .env
+.env.local
+
+# Build outputs
+release/
+dist/
+build/installer.nsi.disabled
+android/app/build/
+android/.gradle/
+android/build/
+*.apk
+*.aab
+*.exe
+*.zip
+
+# IDE
+.idea/
+.vscode/
+*.swp

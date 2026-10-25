@@ -1,118 +1,167 @@
-# Sonor - Музыкальный плеер (Music Player)
+# Sonor — музыкальный плеер
 
-An enhanced mobile music player with a stunning blue-themed design that supports importing music from VK Music, Yandex Music, and Spotify.
+Красивый музыкальный плеер в сине-голубой неоновой теме: десктоп-приложение для Windows и мобильное приложение на Expo (Android / iOS). Поддерживает локальные аудиофайлы и импорт плейлистов из **VK Музыки**, **Яндекс Музыки** и **Spotify**.
 
-## Features
-- 💙 Beautiful blue-themed gradient interface
-- 🎵 Import music from VK Music, Yandex Music, and Spotify
-- 📱 Cross-platform mobile app (iOS & Android) using Expo
-- 🎧 Audio playback with full controls
-- 📱 Responsive layout optimized for mobile devices
-- 🎨 Glass-morphism UI effects
-- 📋 Track listing with playback controls
-- 🔐 Secure token-based authentication
+![Sonor](icon.png)
 
-## Setup Instructions
+## Возможности
 
-### Prerequisites
-- Node.js (v16 or higher)
-- npm or yarn
-- Expo CLI
+- 🎧 Воспроизведение локальных файлов: MP3, FLAC, WAV, M4A, OGG
+- 💙 Премиальный дизайн: glassmorphism, градиенты, неоновый циан `#00d4ff`
+- 📥 Импорт треков из VK Музыки, Яндекс Музыки и Spotify по токену
+- 🔎 Поиск по названию и исполнителю
+- ▶️ Полный плеер: play/pause, следующий/предыдущий, перемотка, громкость, автопереход
+- 🖱️ Drag & drop файлов в окно приложения
+- 📱 Адаптивный мобильный интерфейс (Expo, React Native)
+- 🪟 Установщик Windows (NSIS) + портативный ZIP
+- 🤖 Сборка Android APK через GitHub Actions
 
-### Installation
+## Готовые сборки
 
-1. Install Expo CLI globally:
-   ```bash
-   npm install -g expo-cli
-   ```
+| Платформа | Файл | Где взять |
+|---|---|---|
+| Windows (установщик) | `Sonor-Setup-1.0.0.exe` | папка `release/` после сборки или GitHub Releases |
+| Windows (портативная) | `Sonor Music Player-1.0.0-win.zip` | папка `release/` или GitHub Releases |
+| Android (APK) | `sonor-apk` | артефакт workflow **Build Android APK** в GitHub Actions |
+| iOS | `.ipa` | только через EAS Build (нужен Apple Developer) |
 
-2. Install dependencies:
-   ```bash
-   cd "Музыкальный плеер"
-   npm install
-   ```
+> Для телефонов собирается **APK** (Android) — формат установочного файла для мобильных. `.exe` — это формат Windows, на телефоне он не запускается.
 
-3. Start the development server:
-   ```bash
-   npm start
-   ```
+### GitHub Actions
 
-4. Run on a device:
-   ```bash
-   npm run android
-   # or
-   npm run ios
-   # or for web:
-   npm run web
-   ```
+- **Build Android APK** — `Actions → Build Android APK → Run workflow`. Готовый APK появится в артефактах workflow (`sonor-apk`).
+- **Build Windows Installer** — `Actions → Build Windows Installer → Run workflow`. Установщик и ZIP появятся в артефактах (`sonor-windows-setup`).
 
-## Configuration
+## Быстрый старт
 
-To enable music imports, you need to obtain API tokens:
+```bash
+npm install --legacy-peer-deps
+npm start              # Expo dev server (телефон / веб)
+npm run start:desktop  # Electron-приложение на компьютере
+```
 
-### VK Music
-1. Go to [vk.com/editapp](https://vk.com/editapp)
-2. Create a new application
-3. Set the redirect URI
-4. Get your client ID and token
-5. Configure in `src/config/apiConfig.js`
+Требуется Node.js 18+ (проверено на Node 24).
 
-### Yandex Music
-1. Go to [Yandex OAuth](https://oauth.yandex.ru/)
-2. Register a new application
-3. Get your client ID and OAuth token
-4. Configure in `src/config/apiConfig.js`
+## Сборка
+
+### Windows
+
+```bash
+npm run build:windows
+```
+
+Результат:
+
+- `release/Sonor-Setup-1.0.0.exe` — установщик с выбором папки, ярлыками на рабочем столе и в меню «Пуск»
+- `release/Sonor Music Player-1.0.0-win.zip` — портативная версия
+- `release/win-unpacked/` — распакованное приложение
+
+Сборка не подписывается сертификатом (в конфиге `signAndEditExecutable: false`), поэтому Windows SmartScreen может показать предупреждение «Неизвестный издатель» — это нормально для неподписанных сборок.
+
+### Android
+
+Вариант 1 — GitHub Actions (рекомендуется, Android SDK не нужен локально):
+
+```
+Actions → Build Android APK → Run workflow
+```
+
+Вариант 2 — локально (нужен Android SDK + JDK 17):
+
+```bash
+npx expo prebuild --platform android --clean
+cd android
+./gradlew assembleRelease
+```
+
+APK: `android/app/build/outputs/apk/release/app-release.apk`.
+
+Вариант 3 — EAS Build:
+
+```bash
+npm run build:android
+```
+
+## Настройка импорта
+
+Импорт работает по токенам доступа. Токены вводятся на вкладке «Импорт музыки» и никуда не сохраняются.
+
+### VK Музыка
+
+1. Откройте [vk.com/editapp](https://vk.com/editapp) и создайте Standalone-приложение.
+2. Получите access token с правами `audio`.
+3. Вставьте токен в поле VK.
+
+> VK ограничивает `audio.get` для сторонних приложений — если API вернёт ошибку доступа, используйте официальный токен приложения VK.
+
+### Яндекс Музыка
+
+1. Зарегистрируйте приложение на [oauth.yandex.ru](https://oauth.yandex.ru/).
+2. Получите OAuth-токен с доступом к музыке.
+3. Вставьте токен в поле Яндекс.
+
+Импортируются все плейлисты пользователя. Часть треков может быть без прямой ссылки — такие треки отображаются, но воспроизведение доступно только при наличии `preview`.
 
 ### Spotify
-1. Go to [Spotify Developer](https://developer.spotify.com/)
-2. Create a new application
-3. Set redirect URI (e.g., `http://localhost:19003`)
-4. Get your client ID and token
-5. Configure in `src/config/apiConfig.js`
 
-## Usage
+1. Создайте приложение на [developer.spotify.com](https://developer.spotify.com/dashboard).
+2. Получите access token (scopes: `playlist-read-private`, `user-library-read`).
+3. Вставьте токен в поле Spotify.
 
-1. **Import Music**: Click the "📥 Импорт музыки" button and enter your API tokens
-2. **Play Music**: Tap on any track in the list to start playing
-3. **Control Playback**: Use the play/pause and skip buttons in the player controls
-4. **Toggle Import**: Show/hide the import section as needed
+Spotify отдаёт только 30-секундные `preview_url` для части треков; полноценное воспроизведение требует Spotify Premium и SDK, поэтому в Sonor импортируются метаданные и превью.
 
-## Project Structure
+## Структура проекта
 
 ```
 Музыкальный плеер/
-├── App.js                 # Main application entry point
-├── package.json           # Project dependencies and scripts
-├── README.md              # Project documentation
-└── src/
-    ├── components/
-    │   ├── MusicImporter.js    # Import component for VK/Yandex/Spotify
-    │   ├── PlayerControls.js   # Audio player controls
-    │   └── TrackList.js        # Track listing component
-    ├── config/
-    │   └── apiConfig.js        # API configurations
-    └── services/
-        └── musicImport.js      # Music import service logic
+├── App.js                      # Мобильное приложение (Expo)
+├── index.html                  # Интерфейс десктоп-приложения
+├── electron-main.js            # Electron main: окно + импорт через HTTPS
+├── main.js                     # Ранний Electron entry
+├── electron-builder.config.js  # Конфигурация сборки Windows
+├── package.json
+├── app.json                    # Конфигурация Expo
+├── eas.json                    # Профили EAS Build
+├── babel.config.js
+├── icon.png / splash.png       # Иконка и заставка
+├── build/
+│   ├── icon.ico                # Иконка Windows (16–256 px)
+│   └── icon.png
+├── src/
+│   ├── components/
+│   │   ├── MusicImporter.js    # UI импорта на мобильном
+│   │   ├── PlayerControls.js
+│   │   └── TrackList.js
+│   ├── config/apiConfig.js
+│   └── services/musicImport.js # Импорт для мобильного приложения
+├── android/                    # Нативная Android-обвязка
+├── ios/                        # Нативная iOS-обвязка
+└── .github/workflows/
+    ├── build-apk.yml           # CI сборки APK
+    └── build-windows.yml       # CI сборки установщика
 ```
 
-## Design Guidelines
+## Дизайн
 
-The player features a modern blue-themed design:
-- Primary color: `#00d4ff` (Cyan blue)
-- Secondary colors: Deep blue gradients
-- Background: Dark blue gradient (`#0f2027` → `#203345` → `#2c5364`)
-- Glass-morphism effects with blur overlays
-- Smooth animations and transitions
+- Основной акцент: `#00d4ff` (циан)
+- Второй акцент: `#4facfe` (голубой)
+- Фон: `#0f2027 → #203345 → #2c5364`
+- Стеклянные панели, мягкие тени, градиентные кнопки
+- Тёмная тема, оптимизированная под OLED
 
-## Troubleshooting
+## Решение проблем
 
-- **Import fails**: Check your API tokens and permissions
-- **Audio not playing**: Ensure device volume is up and headphones are connected
-- **App crashes**: Clear the Expo cache: `expo start -c`
+- **`npm install` падает с peer dependency** — используйте `npm install --legacy-peer-deps`.
+- **Windows SmartScreen** — установщик не подписан, нажмите «Подробнее → Выполнить в любом случае».
+- **Пустое окно Electron** — запустите `npm run start:desktop`; в dev-режиме приложение ждёт Expo на `localhost:19006`.
+- **Импорт не работает** — проверьте срок жизни токена и необходимые scopes.
+- **Трек не играет** — у трека может не быть прямой ссылки (особенно Spotify/VK); добавьте локальный файл.
 
-## License
+## Лицензия
 
-MIT License - see package.json for details
+MIT © Sonor Music
 
 ---
-Made with ❤️ using React Native and Expo
+
+Сделано с ❤️ на React Native, Expo и Electron.
+GitHub: https://github.com/MyNameIsNikki/Sonor

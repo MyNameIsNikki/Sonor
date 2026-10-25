@@ -1,191 +1,225 @@
-// Enhanced Audio Player Controls Component
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated } from 'react-native';
-import { BlurView } from 'expo-blur';
+// Player controls with live progress and previous/next navigation
+import React, { useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Audio } from 'expo-av';
 
-const PlayerControls = ({ track, isPlaying, onToggle }) => {
- const [progress, setProgress] = useState(0);
- const [duration, setDuration] = useState(0);
- const [position, setPosition] = useState(0);
- const fadeAnim = new Animated.Value(0);
+const SOURCE_LABELS = {
+  local: 'ЛОКАЛЬНО',
+  vk: 'VK',
+  yandex: 'ЯНДЕКС',
+  spotify: 'SPOTIFY'
+};
 
- useEffect(() => {
- // Animate in
- Animated.timing(fadeAnim, {
- toValue: 1,
- duration: 500,
- useNativeDriver: true,
- });
- }, []);
+const PlayerControls = ({
+  track,
+  isPlaying,
+  onToggle,
+  onNext,
+  onPrevious,
+  position = 0,
+  duration = 0
+}) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
- const formatTime = (milliseconds) => {
- const totalSeconds = Math.floor(milliseconds / 1000);
- const mins = Math.floor(totalSeconds / 60);
- const secs = totalSeconds % 60;
- return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
- };
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 450,
+      useNativeDriver: true
+    }).start();
+  }, [fadeAnim]);
 
- return (
- <Animated.View style={[styles.playerContainer, { opacity: fadeAnim }]}>
- <View style={styles.trackInfo}>
- <View style={styles.albumPlaceholder}>
- <LinearGradient 
- colors={['#00d4ff', '#0099cc']} 
- style={styles.albumGradient}
- >
- <Text style={styles.albumIcon}>🎵</Text>
- </LinearGradient>
- </View>
- <View style={styles.trackDetails}>
- <Text style={styles.trackTitle} numberOfLines={1}>
- {track?.title || 'Моя любимая песня'}
- </Text>
- <Text style={styles.artistName} numberOfLines={1}>
- {track?.artist || 'Неизвестный артист'}
- </Text>
- </View>
- </View>
- 
- <View style={styles.progressSection}>
- <View style={styles.progressBarBg}>
- <View style={[styles.progressFill, { width: `${progress}%` }]} />
- </View>
- <View style={styles.timeContainer}>
- <Text style={styles.timeText}>{formatTime(position)}</Text>
- <Text style={styles.timeText}>{formatTime(duration)}</Text>
- </View>
- </View>
- 
- <View style={styles.controlsContainer}>
- <TouchableOpacity style={styles.controlBtn} onPress={() => Alert.alert('Функция в разработке')}>
- <Text style={styles.controlIcon}>⏪</Text>
- </TouchableOpacity>
- 
- <TouchableOpacity style={styles.playBtn} onPress={onToggle}>
- {isPlaying ? (
- <LinearGradient colors={['#00d4ff', '#0099cc']} style={styles.playGradient}>
- <Text style={styles.pauseIcon}>⏸</Text>
- </LinearGradient>
- ) : (
- <LinearGradient colors={['#00d4ff', '#0099cc']} style={styles.playGradient}>
- <Text style={styles.playIcon}>▶</Text>
- </LinearGradient>
- )}
- </TouchableOpacity>
- 
- <TouchableOpacity style={styles.controlBtn} onPress={() => Alert.alert('Функция в разработке')}>
- <Text style={styles.controlIcon}>⏩</Text>
- </TouchableOpacity>
- </View>
- </Animated.View>
- );
+  const total = duration || track?.duration || 0;
+  const progress = total > 0 ? Math.min(100, (position / total) * 100) : 0;
+
+  const formatTime = (milliseconds) => {
+    const totalSeconds = Math.max(0, Math.floor((milliseconds || 0) / 1000));
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  return (
+    <Animated.View style={[styles.playerContainer, { opacity: fadeAnim }]}>
+      <View style={styles.trackInfo}>
+        <LinearGradient colors={['#00d4ff', '#0077a8']} style={styles.albumPlaceholder}>
+          <Text style={styles.albumIcon}>♪</Text>
+        </LinearGradient>
+        <View style={styles.trackDetails}>
+          <Text style={styles.trackTitle} numberOfLines={1}>
+            {track?.title || 'Моя любимая песня'}
+          </Text>
+          <View style={styles.artistRow}>
+            <Text style={styles.artistName} numberOfLines={1}>
+              {track?.artist || 'Неизвестный артист'}
+            </Text>
+            {track?.source ? (
+              <Text style={styles.sourceBadge}>
+                {SOURCE_LABELS[track.source] || track.source}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.progressSection}>
+        <View style={styles.progressBarBg}>
+          <View style={[styles.progressFill, { width: `${progress}%` }]} />
+        </View>
+        <View style={styles.timeContainer}>
+          <Text style={styles.timeText}>{formatTime(position)}</Text>
+          <Text style={styles.timeText}>{formatTime(total)}</Text>
+        </View>
+      </View>
+
+      <View style={styles.controlsContainer}>
+        <TouchableOpacity style={styles.controlBtn} onPress={onPrevious}>
+          <Text style={styles.controlIcon}>⏮</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.playBtn} onPress={onToggle} activeOpacity={0.85}>
+          <LinearGradient colors={['#4facfe', '#00d4ff']} style={styles.playGradient}>
+            <Text style={isPlaying ? styles.pauseIcon : styles.playIcon}>
+              {isPlaying ? '⏸' : '▶'}
+            </Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.controlBtn} onPress={onNext}>
+          <Text style={styles.controlIcon}>⏭</Text>
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
+  );
 };
 
 const styles = StyleSheet.create({
- playerContainer: {
- padding: 15,
- paddingBottom: 25,
- },
- trackInfo: {
- flexDirection: 'row',
- alignItems: 'center',
- gap: 15,
- marginBottom: 15,
- },
- albumPlaceholder: {
- width: 55,
- height: 55,
- borderRadius: 8,
- overflow: 'hidden',
- },
- albumGradient: {
- width: '100%',
- height: '100%',
- justifyContent: 'center',
- alignItems: 'center',
- },
- albumIcon: {
- fontSize: 22,
- },
- trackDetails: {
- flex: 1,
- },
- trackTitle: {
- fontSize: 14,
- fontWeight: 'bold',
- color: '#fff',
- },
- artistName: {
- fontSize: 12,
- color: '#a0c4d8',
- marginTop: 2,
- },
- progressSection: {
- marginBottom: 15,
- },
- progressBarBg: {
- height: 4,
- backgroundColor: 'rgba(255, 255, 255, 0.15)',
- borderRadius: 2,
- overflow: 'hidden',
- },
- progressFill: {
- height: '100%',
- backgroundColor: '#00d4ff',
- borderRadius: 2,
- },
- timeContainer: {
- flexDirection: 'row',
- justifyContent: 'space-between',
- marginTop: 5,
- },
- timeText: {
- fontSize: 11,
- color: '#a0c4d8',
- },
- controlsContainer: {
- flexDirection: 'row',
- alignItems: 'center',
- justifyContent: 'center',
- gap: 25,
- },
- controlBtn: {
- width: 40,
- height: 40,
- borderRadius: 20,
- backgroundColor: 'rgba(255, 255, 255, 0.1)',
- justifyContent: 'center',
- alignItems: 'center',
- },
- playBtn: {
- width: 64,
- height: 64,
- borderRadius: 32,
- overflow: 'hidden',
- elevation: 8,
- },
- playGradient: {
- width: '100%',
- height: '100%',
- justifyContent: 'center',
- alignItems: 'center',
- },
- controlIcon: {
- fontSize: 16,
- color: '#fff',
- },
- playIcon: {
- fontSize: 22,
- color: '#0f2027',
- fontWeight: 'bold',
- },
- pauseIcon: {
- fontSize: 22,
- color: '#0f2027',
- fontWeight: 'bold',
- },
+  playerContainer: {
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 22
+  },
+  trackInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 14
+  },
+  albumPlaceholder: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#00d4ff',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6
+  },
+  albumIcon: {
+    fontSize: 24,
+    color: '#04222b',
+    fontWeight: 'bold'
+  },
+  trackDetails: {
+    flex: 1
+  },
+  trackTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.2
+  },
+  artistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4
+  },
+  artistName: {
+    fontSize: 12,
+    color: '#a0c4d8',
+    flexShrink: 1
+  },
+  sourceBadge: {
+    fontSize: 9,
+    letterSpacing: 0.6,
+    color: '#00d4ff',
+    backgroundColor: 'rgba(0, 212, 255, 0.12)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+    overflow: 'hidden'
+  },
+  progressSection: {
+    marginBottom: 12
+  },
+  progressBarBg: {
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    borderRadius: 999,
+    overflow: 'hidden'
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#00d4ff',
+    borderRadius: 999
+  },
+  timeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6
+  },
+  timeText: {
+    fontSize: 10.5,
+    color: '#7fa6b8',
+    fontVariant: ['tabular-nums']
+  },
+  controlsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 26
+  },
+  controlBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  playBtn: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    overflow: 'hidden',
+    elevation: 10,
+    shadowColor: '#00d4ff',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.45,
+    shadowRadius: 16
+  },
+  playGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  controlIcon: {
+    fontSize: 17,
+    color: '#eaf6fb'
+  },
+  playIcon: {
+    fontSize: 23,
+    color: '#032730',
+    marginLeft: 3
+  },
+  pauseIcon: {
+    fontSize: 23,
+    color: '#032730'
+  }
 });
 
 export default PlayerControls;
