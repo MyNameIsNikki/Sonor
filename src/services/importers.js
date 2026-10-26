@@ -1189,6 +1189,71 @@ async function importPublicLink(link, onProgress) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Token check                                                         */
+/* ------------------------------------------------------------------ */
+
+function authError(err) {
+  const message = err && err.message ? err.message : String(err);
+  if (/HTTP (401|403)|unauthor|invalid.*token|token.*invalid|access token/i.test(message)) {
+    return new Error('Токен недействителен или истёк. Получите новый токен и попробуйте снова.');
+  }
+  return err instanceof Error ? err : new Error(message);
+}
+
+async function checkToken(service, token) {
+  const value = String(token || '').trim();
+  if (!value) throw new Error('Вставьте токен');
+
+  try {
+    if (service === 'vk') {
+      const data = await getJson(
+        'https://api.vk.com/method/users.get?access_token=' + encodeURIComponent(value) +
+        '&v=5.131&fields=screen_name'
+      );
+      if (data.error) {
+        throw new Error(data.error.error_msg || 'VK отклонил токен');
+      }
+      const user = data.response && data.response[0];
+      if (!user) throw new Error('VK не вернул данные аккаунта');
+      const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || user.screen_name;
+      return { name: name, login: user.screen_name || '', id: user.id ? String(user.id) : '' };
+    }
+
+    if (service === 'yandex') {
+      const data = await getJson('https://api.music.yandex.net/account/status', {
+        Authorization: 'OAuth ' + value
+      });
+      const result = data.result || data;
+      const account = result.account || result;
+      if (!account || (!account.uid && !account.login && !account.displayName)) {
+        throw new Error('Яндекс Музыка не вернула данные аккаунта');
+      }
+      return {
+        name: account.displayName || account.login || account.email || 'Яндекс Музыка',
+        login: account.login || '',
+        id: account.uid ? String(account.uid) : ''
+      };
+    }
+
+    if (service === 'spotify') {
+      const data = await getJson('https://api.spotify.com/v1/me', {
+        Authorization: 'Bearer ' + value
+      });
+      if (!data || !data.id) throw new Error('Spotify не вернул данные аккаунта');
+      return {
+        name: data.display_name || data.email || data.id,
+        login: data.id,
+        id: data.id
+      };
+    }
+  } catch (err) {
+    throw authError(err);
+  }
+
+  throw new Error('Неизвестный сервис: ' + service);
+}
+
+/* ------------------------------------------------------------------ */
 /* Public API                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -1206,5 +1271,6 @@ module.exports = {
   importService: importService,
   importPublicLink: importPublicLink,
   resolveYandexStream: resolveYandexStream,
+  checkToken: checkToken,
   MAX_TRACKS: MAX_TRACKS
 };

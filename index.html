@@ -1,624 +1,1323 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data: blob: https: http:; media-src 'self' blob: https: http:; img-src 'self' data: blob: https: http:;">
 <title>Sonor — Музыкальный плеер</title>
 <style>
   :root {
-    --bg-0: #08151c;
-    --bg-1: #0f2027;
-    --bg-2: #17323f;
-    --bg-3: #1e4152;
-    --glass: rgba(255, 255, 255, 0.05);
-    --glass-strong: rgba(255, 255, 255, 0.09);
-    --stroke: rgba(160, 212, 235, 0.16);
-    --text: #eaf6fb;
-    --muted: #93b4c4;
-    --accent: #00d4ff;
-    --accent-2: #4facfe;
-    --danger: #ff6b81;
-    --radius: 16px;
-    --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+    --bg: #060d12;
+    --panel: #0a151b;
+    --panel-2: #0e1c24;
+    --panel-3: #12232c;
+    --line: #172832;
+    --line-soft: #112029;
+    --text: #e7f3f8;
+    --muted: #7f99a7;
+    --muted-2: #58717e;
+    --cyan: #22d3ee;
+    --cyan-strong: #06b6d4;
+    --cyan-dark: #0e7490;
+    --cyan-soft: rgba(34, 211, 238, .1);
+    --green: #34d399;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --vk: #4c8bf5;
+    --spotify: #1ed760;
+    --radius: 10px;
   }
 
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
+
   body {
-    margin: 0;
-    font-family: "Segoe UI", "Inter", Tahoma, sans-serif;
-    color: var(--text);
     background:
-      radial-gradient(900px 600px at 8% -10%, rgba(0, 212, 255, 0.18), transparent 60%),
-      radial-gradient(800px 600px at 100% 0%, rgba(79, 172, 254, 0.14), transparent 55%),
-      linear-gradient(150deg, var(--bg-1) 0%, var(--bg-2) 48%, var(--bg-3) 100%);
+      radial-gradient(900px 460px at 72% -12%, rgba(34, 211, 238, .07), transparent 65%),
+      var(--bg);
+    color: var(--text);
+    font-family: "Inter", "Segoe UI", "SF Pro Display", system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
     overflow: hidden;
+    -webkit-font-smoothing: antialiased;
     user-select: none;
   }
 
-  /* ---------- Title bar ---------- */
+  button, input { font: inherit; color: inherit; }
+  button { background: none; border: 0; cursor: pointer; }
+  img { display: block; max-width: 100%; }
+  ::selection { background: rgba(34, 211, 238, .28); }
+
+  button:focus-visible, input:focus-visible, a:focus-visible {
+    outline: 2px solid var(--cyan);
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: #1b303b;
+    border-radius: 8px;
+    border: 2px solid var(--bg);
+  }
+  ::-webkit-scrollbar-thumb:hover { background: #274553; }
+
+  /* ---------- Window chrome ---------- */
   .titlebar {
-    height: 46px;
+    height: 40px;
+    flex: 0 0 40px;
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 0 8px 0 18px;
+    justify-content: space-between;
+    background: #091218;
+    border-bottom: 1px solid var(--line-soft);
     -webkit-app-region: drag;
-    background: rgba(6, 18, 24, 0.55);
-    border-bottom: 1px solid var(--stroke);
+    position: relative;
+    z-index: 50;
   }
-  .titlebar .dot {
-    width: 26px; height: 26px; border-radius: 9px;
-    background: linear-gradient(135deg, var(--accent-2), var(--accent));
-    display: grid; place-items: center;
-    color: #04222b; font-size: 14px; font-weight: 800;
-    box-shadow: 0 0 18px rgba(0, 212, 255, 0.45);
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding-left: 16px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2.4px;
+    color: #cfecf4;
   }
-  .titlebar .name { font-weight: 600; letter-spacing: 0.4px; font-size: 13.5px; }
-  .titlebar .name span { color: var(--accent); }
-  .titlebar .spacer { flex: 1; }
-  .win-actions { display: flex; gap: 4px; -webkit-app-region: no-drag; }
+
+  .brand-mark {
+    width: 21px;
+    height: 21px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, var(--cyan), var(--cyan-dark));
+    color: #041016;
+    font-size: 12px;
+    letter-spacing: 0;
+  }
+
+  .brand span { color: var(--muted-2); font-weight: 500; letter-spacing: 1.3px; }
+
+  .win-actions {
+    display: flex;
+    height: 100%;
+    -webkit-app-region: no-drag;
+  }
+
   .win-btn {
-    width: 40px; height: 30px; border: 0; border-radius: 8px;
-    background: transparent; color: var(--muted);
-    font-size: 14px; cursor: pointer; transition: 0.15s;
+    width: 46px;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    color: #8fa8b5;
+    font-size: 14px;
+    line-height: 1;
+    transition: background .14s ease, color .14s ease;
   }
-  .win-btn:hover { background: var(--glass-strong); color: var(--text); }
-  .win-btn.close:hover { background: #d93b52; color: #fff; }
+  .win-btn:hover { background: #16262f; color: #fff; }
+  .win-btn.close {
+    color: #fca5a5;
+    border-left: 1px solid var(--line-soft);
+    font-size: 16px;
+  }
+  .win-btn.close:hover { background: #c42b1c; color: #fff; }
 
-  /* ---------- Layout ---------- */
-  .app { display: flex; flex-direction: column; height: calc(100% - 46px); min-height: 0; }
-  .shell { display: flex; flex: 1; min-height: 0; }
-
-  .sidebar {
-    width: 232px;
-    padding: 22px 16px;
+  /* ---------- App frame ---------- */
+  .app {
+    height: calc(100vh - 40px);
     display: flex;
     flex-direction: column;
-    gap: 26px;
-    border-right: 1px solid var(--stroke);
-    background: rgba(5, 16, 21, 0.35);
-    backdrop-filter: blur(14px);
+    overflow: hidden;
   }
-  .brand { display: flex; align-items: center; gap: 12px; padding: 0 6px; }
-  .brand .logo {
-    width: 42px; height: 42px; border-radius: 14px;
-    background: linear-gradient(135deg, var(--accent-2), var(--accent));
-    display: grid; place-items: center; font-size: 21px;
-    box-shadow: 0 10px 28px rgba(0, 212, 255, 0.32);
-  }
-  .brand h1 { margin: 0; font-size: 19px; letter-spacing: 1.6px; }
-  .brand p { margin: 2px 0 0; font-size: 11px; color: var(--muted); letter-spacing: 0.6px; }
 
-  .nav { display: flex; flex-direction: column; gap: 6px; }
-  .nav-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 1.4px; color: var(--muted); padding: 0 10px 5px; }
+  .shell {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 236px minmax(0, 1fr);
+  }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 22px 14px 16px;
+    background: #081117;
+    border-right: 1px solid var(--line-soft);
+  }
+
+  .profile {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 0 8px 22px;
+  }
+
+  .avatar {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(140deg, #164e63, #0b303c);
+    border: 1px solid rgba(34, 211, 238, .32);
+    color: var(--cyan);
+    font-size: 17px;
+    font-weight: 700;
+  }
+
+  .profile-name { font-size: 14px; font-weight: 650; letter-spacing: .2px; }
+  .profile-sub { color: var(--muted-2); font-size: 11.5px; margin-top: 1px; }
+
+  .nav-label {
+    padding: 0 12px 8px;
+    color: var(--muted-2);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.6px;
+    text-transform: uppercase;
+  }
+
+  .nav { display: flex; flex-direction: column; gap: 3px; }
+
   .nav-btn {
-    display: flex; align-items: center; gap: 11px;
-    padding: 11px 12px; border: 0; border-radius: 12px;
-    background: transparent; color: var(--muted);
-    font-size: 13.5px; font-weight: 500; text-align: left; cursor: pointer;
-    transition: 0.18s;
+    height: 39px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 0 12px;
+    border-radius: 8px;
+    color: #9bb1bd;
+    font-size: 13.5px;
+    text-align: left;
+    border: 1px solid transparent;
+    transition: background .14s ease, color .14s ease;
   }
-  .nav-btn .ico { font-size: 16px; width: 20px; text-align: center; }
-  .nav-btn:hover { background: var(--glass); color: var(--text); }
+  .nav-btn svg { width: 17px; height: 17px; flex: 0 0 17px; opacity: .8; }
+  .nav-btn:hover { background: #0f1e26; color: var(--text); }
   .nav-btn.active {
-    background: linear-gradient(120deg, rgba(0, 212, 255, 0.2), rgba(79, 172, 254, 0.08));
-    color: #fff;
-    box-shadow: inset 0 0 0 1px rgba(0, 212, 255, 0.35);
+    background: var(--cyan-soft);
+    border-color: rgba(34, 211, 238, .18);
+    color: #a5f3fc;
+    font-weight: 600;
   }
-  .nav-btn .count {
-    margin-left: auto; font-size: 11px; padding: 2px 8px;
-    border-radius: 999px; background: var(--glass-strong); color: var(--accent);
-  }
+  .nav-btn.active svg { opacity: 1; color: var(--cyan); }
 
-  .tip {
-    margin-top: auto; padding: 14px;
-    border-radius: 14px; border: 1px solid var(--stroke);
-    background: var(--glass); font-size: 11.5px; line-height: 1.5; color: var(--muted);
+  .nav-count {
+    margin-left: auto;
+    min-width: 20px;
+    height: 19px;
+    padding: 0 6px;
+    display: grid;
+    place-items: center;
+    border-radius: 20px;
+    background: #12232c;
+    color: #9eb6c2;
+    font-size: 10.5px;
+    font-weight: 650;
   }
-  .tip b { color: var(--accent); font-weight: 600; }
+  .nav-btn.active .nav-count { background: rgba(34, 211, 238, .16); color: var(--cyan); }
+
+  .side-bottom { margin-top: auto; }
+
+  .side-tip {
+    margin: 18px 2px 14px;
+    padding: 13px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: #0b181f;
+  }
+  .side-tip-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #a5dbe7;
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+  }
+  .side-tip p { margin-top: 6px; color: var(--muted-2); font-size: 11.5px; line-height: 1.55; }
+
+  .side-version {
+    padding: 0 12px;
+    color: #3f5763;
+    font-size: 10.5px;
+    letter-spacing: .4px;
+  }
 
   /* ---------- Main ---------- */
-  main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 24px 28px 18px; overflow: hidden; }
-  .view { display: none; flex-direction: column; min-height: 0; height: 100%; }
-  .view.active { display: flex; animation: fade 0.25s ease; }
-  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-
-  .view-head { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 18px; }
-  .view-head h2 { margin: 0; font-size: 26px; letter-spacing: 0.3px; }
-  .view-head p { margin: 5px 0 0; font-size: 12.5px; color: var(--muted); }
-  .view-head .grow { flex: 1; }
-
-  .btn {
-    display: inline-flex; align-items: center; gap: 8px;
-    border: 1px solid var(--stroke); border-radius: 11px;
-    padding: 10px 15px; font-size: 12.5px; font-weight: 600;
-    background: var(--glass); color: var(--text); cursor: pointer; transition: 0.18s;
+  .main {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
   }
-  .btn:hover { background: var(--glass-strong); border-color: rgba(0, 212, 255, 0.35); }
-  .btn.primary {
-    border: 0; color: #032730;
-    background: linear-gradient(120deg, var(--accent-2), var(--accent));
-    box-shadow: 0 10px 26px rgba(0, 212, 255, 0.28);
+
+  .view {
+    display: none;
+    height: 100%;
+    overflow-y: auto;
+    padding: 0 30px 26px;
   }
-  .btn.primary:hover { filter: brightness(1.08); }
-  .btn.ghost-danger:hover { border-color: rgba(255, 107, 129, 0.5); color: var(--danger); }
+  .view.active { display: flex; flex-direction: column; }
+  .view > * { flex-shrink: 0; }
+
+  #view-library { overflow: hidden; }
+
+  .view-top {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    min-height: 64px;
+    padding: 13px 0;
+    background: var(--bg);
+  }
+
+  .crumb {
+    color: var(--muted-2);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: .8px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .crumb b { color: #a7c3ce; font-weight: 600; }
+  .crumb span { margin: 0 7px; color: #334a55; }
+
+  .top-actions { display: flex; align-items: center; gap: 9px; }
 
   .search {
-    display: flex; align-items: center; gap: 9px;
-    border: 1px solid var(--stroke); border-radius: 11px;
-    background: rgba(3, 14, 19, 0.45); padding: 9px 13px; min-width: 240px;
+    width: 260px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 11px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #0b171e;
+    color: var(--muted-2);
+    transition: border-color .14s ease, background .14s ease;
   }
+  .search:focus-within { border-color: rgba(34, 211, 238, .5); background: #0c1a21; }
+  .search svg { width: 15px; height: 15px; flex: 0 0 15px; }
   .search input {
-    border: 0; outline: 0; background: transparent; color: var(--text);
-    font-size: 12.5px; width: 100%;
+    width: 100%;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font-size: 12.5px;
   }
-  .search input::placeholder { color: #6f93a3; }
-  .search span { color: var(--muted); font-size: 14px; }
+  .search input::placeholder { color: #54707d; }
+
+  .btn {
+    height: 35px;
+    padding: 0 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #0d1a21;
+    color: #b9ced7;
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background .14s ease, border-color .14s ease, color .14s ease;
+  }
+  .btn:hover { background: #13242d; border-color: #284150; color: #fff; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.primary {
+    background: var(--cyan);
+    border-color: var(--cyan);
+    color: #04212a;
+  }
+  .btn.primary:hover { background: #67e8f9; border-color: #67e8f9; color: #03181f; }
+  .btn.ghost { background: transparent; }
+  .btn.small { height: 29px; padding: 0 10px; font-size: 11.5px; font-weight: 500; }
+  .btn[hidden] { display: none; }
+
+  /* Hero */
+  .hero {
+    display: flex;
+    align-items: flex-end;
+    gap: 23px;
+    padding: 18px 0 22px;
+    min-height: 170px;
+  }
+
+  .hero-cover {
+    width: 132px;
+    height: 132px;
+    flex: 0 0 132px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 30% 20%, rgba(103, 232, 249, .35), transparent 60%),
+      linear-gradient(145deg, #155e75, #0b2a35 67%, #08181f);
+    border: 1px solid rgba(34, 211, 238, .22);
+    color: #a5f3fc;
+    font-size: 50px;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, .28);
+  }
+  .hero-cover img { width: 100%; height: 100%; object-fit: cover; }
+
+  .hero-copy { min-width: 0; padding-bottom: 3px; }
+  .hero-kicker {
+    color: var(--cyan);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 7px;
+  }
+
+  .hero h1 {
+    font-size: clamp(27px, 3vw, 38px);
+    line-height: 1.08;
+    font-weight: 700;
+    letter-spacing: -.8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 760px;
+  }
+
+  .hero-sub {
+    margin-top: 7px;
+    color: var(--muted);
+    font-size: 12.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 660px;
+  }
+
+  .hero-meta { display: flex; align-items: center; gap: 7px; margin-top: 12px; flex-wrap: wrap; }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 9px;
+    border-radius: 20px;
+    border: 1px solid var(--line);
+    background: #0b171e;
+    color: #8ba5b2;
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: .7px;
+    text-transform: uppercase;
+  }
+  .pill.cyan { border-color: rgba(34, 211, 238, .22); background: var(--cyan-soft); color: #a5f3fc; }
 
   /* Track list */
   .list-wrap {
-    flex: 1; min-height: 0; overflow-y: auto;
-    border: 1px solid var(--stroke); border-radius: var(--radius);
-    background: rgba(4, 15, 20, 0.32);
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-bottom: 4px;
+    margin: 0 -8px;
   }
-  .list-wrap::-webkit-scrollbar { width: 9px; }
-  .list-wrap::-webkit-scrollbar-thumb { background: rgba(0, 212, 255, 0.22); border-radius: 999px; }
-  .list-wrap::-webkit-scrollbar-track { background: transparent; }
+
+  .list-head, .row {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) 112px 58px 32px;
+    align-items: center;
+    gap: 14px;
+    padding: 0 12px;
+  }
+
+  .list-head {
+    height: 30px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--line-soft);
+    color: #4f6a76;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--bg);
+  }
+  .list-head .ta-right { text-align: right; }
 
   .row {
-    display: grid;
-    grid-template-columns: 42px 1fr 130px 64px 40px;
-    align-items: center; gap: 12px;
-    padding: 11px 16px;
-    border-bottom: 1px solid rgba(160, 212, 235, 0.07);
-    cursor: pointer; transition: background 0.15s;
+    height: 60px;
+    border-radius: 7px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background .12s ease, border-color .12s ease;
   }
-  .row:last-child { border-bottom: 0; }
-  .row:hover { background: var(--glass); }
-  .row.playing { background: linear-gradient(90deg, rgba(0, 212, 255, 0.16), transparent 70%); }
-  .row.playing .r-title { color: var(--accent); }
-  .r-num { font-size: 12px; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
-  .row.playing .r-num { color: var(--accent); }
+  .row:hover { background: #0d1b22; }
+  .row.playing {
+    background: rgba(34, 211, 238, .075);
+    border-color: rgba(34, 211, 238, .13);
+  }
+
+  .r-num {
+    color: #4f6a76;
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+  .row.playing .r-num { color: var(--cyan); font-size: 10px; }
+
   .r-main { min-width: 0; display: flex; align-items: center; gap: 11px; }
+
   .r-cover {
-    width: 34px; height: 34px; border-radius: 9px; flex: 0 0 auto;
-    background: linear-gradient(135deg, #123542, #1f5c74);
-    display: grid; place-items: center; font-size: 14px; color: var(--accent);
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    display: grid;
+    place-items: center;
     overflow: hidden;
+    border-radius: 5px;
+    background: #10232c;
+    color: #3e8294;
+    font-size: 16px;
   }
   .r-cover img { width: 100%; height: 100%; object-fit: cover; }
+
   .r-text { min-width: 0; }
-  .r-title { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .r-artist { font-size: 11.5px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .r-source { font-size: 10.5px; padding: 3px 9px; border-radius: 999px; justify-self: start; letter-spacing: 0.4px; }
-  .src-local { background: rgba(0, 212, 255, 0.12); color: var(--accent); }
-  .src-vk { background: rgba(79, 172, 254, 0.14); color: #7cc7ff; }
-  .src-yandex { background: rgba(255, 204, 0, 0.12); color: #ffd75e; }
-  .src-spotify { background: rgba(29, 185, 84, 0.13); color: #57d97f; }
-  .src-link { background: rgba(160, 196, 216, 0.12); color: #b7d8e8; }
-  .r-dur { font-size: 11.5px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+  .r-title {
+    font-size: 13px;
+    font-weight: 550;
+    color: #d9eaf1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .row.playing .r-title { color: #a5f3fc; }
+  .r-artist {
+    margin-top: 1px;
+    color: #6c8794;
+    font-size: 11.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .r-source {
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    height: 19px;
+    padding: 0 7px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    background: #0c1920;
+    color: #7893a0;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .7px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .src-vk { color: #8ab4ff; border-color: rgba(76, 139, 245, .24); background: rgba(76, 139, 245, .09); }
+  .src-yandex { color: #fcd34d; border-color: rgba(251, 191, 36, .23); background: rgba(251, 191, 36, .08); }
+  .src-spotify { color: #6ee7a0; border-color: rgba(30, 215, 96, .22); background: rgba(30, 215, 96, .08); }
+  .src-local { color: #94a3b8; }
+  .src-link { color: #c4b5fd; border-color: rgba(167, 139, 250, .24); background: rgba(167, 139, 250, .08); }
+
+  .r-dur {
+    color: #5d7885;
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
   .r-del {
-    border: 0; background: transparent; color: #6f93a3;
-    font-size: 15px; cursor: pointer; border-radius: 8px; height: 28px; opacity: 0;
-    transition: 0.15s;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    color: #47616d;
+    font-size: 11px;
+    opacity: 0;
+    transition: opacity .12s ease, background .12s ease, color .12s ease;
   }
   .row:hover .r-del { opacity: 1; }
-  .r-del:hover { color: var(--danger); background: rgba(255, 107, 129, 0.12); }
-  .list-more {
-    padding: 18px; text-align: center; font-size: 12px; color: var(--muted);
-    border-top: 1px solid rgba(160, 212, 235, 0.07);
-  }
+  .r-del:hover { background: rgba(248, 113, 113, .12); color: var(--red); }
+
+  .list-more { padding: 14px 12px 4px; display: flex; justify-content: center; }
   .list-more button {
-    border: 1px solid var(--stroke); border-radius: 999px; padding: 7px 16px;
-    background: var(--glass); color: var(--accent); font-size: 11.5px; cursor: pointer;
+    height: 33px;
+    padding: 0 15px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: #0b171e;
+    color: #91abb8;
+    font-size: 12px;
   }
-  .list-more button:hover { background: var(--glass-strong); border-color: rgba(0, 212, 255, 0.4); }
+  .list-more button:hover { border-color: #2b4655; color: #fff; }
 
-  .empty {
-    height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 12px; color: var(--muted); text-align: center; padding: 30px;
+  .empty-state {
+    min-height: 300px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 48px 24px;
   }
-  .empty .big { font-size: 46px; filter: drop-shadow(0 0 22px rgba(0, 212, 255, 0.35)); }
-  .empty h3 { margin: 0; color: var(--text); font-size: 17px; }
-  .empty p { margin: 0; font-size: 12.5px; max-width: 360px; line-height: 1.6; }
+  .empty-glyph {
+    width: 58px;
+    height: 58px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #0d1c24;
+    border: 1px solid var(--line);
+    color: #3f7d8e;
+    font-size: 24px;
+    margin-bottom: 14px;
+  }
+  .empty-title { font-size: 16px; font-weight: 650; color: #c8dfe8; }
+  .empty-text { max-width: 420px; margin-top: 5px; color: var(--muted-2); font-size: 12px; line-height: 1.6; }
 
-  /* Playlists / albums */
+  /* Page headers */
+  .page-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 10px 0 18px;
+  }
+  .page-head h1 { font-size: 30px; line-height: 1.15; font-weight: 700; letter-spacing: -.6px; }
+  .page-head p { margin-top: 7px; color: var(--muted); font-size: 12.5px; max-width: 620px; }
+
+  /* Collections */
   .collection-grid {
-    flex: 1; min-height: 0; overflow-y: auto; align-content: start;
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
-    gap: 16px; padding: 2px 4px 12px 0;
-  }
-  .collection-grid::-webkit-scrollbar { width: 9px; }
-  .collection-grid::-webkit-scrollbar-thumb { background: rgba(0, 212, 255, 0.22); border-radius: 999px; }
-  .coll {
-    position: relative; overflow: hidden; cursor: pointer;
-    border: 1px solid var(--stroke); border-radius: 15px;
-    background: rgba(6, 20, 27, 0.55);
-    transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
-  }
-  .coll:hover {
-    transform: translateY(-3px); border-color: rgba(0, 212, 255, 0.4);
-    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
-  }
-  .coll-cover {
-    aspect-ratio: 1 / 1; display: grid; place-items: center;
-    background: linear-gradient(135deg, #123542, #1f5c74);
-    color: var(--accent); font-size: 42px; overflow: hidden;
-  }
-  .coll-cover img { width: 100%; height: 100%; object-fit: cover; }
-  .coll-body { padding: 11px 12px 13px; }
-  .coll-title {
-    font-size: 13px; font-weight: 600; white-space: nowrap;
-    overflow: hidden; text-overflow: ellipsis;
-  }
-  .coll-sub { margin-top: 4px; font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .coll-badge {
-    position: absolute; top: 9px; left: 9px; font-size: 9.5px;
-    letter-spacing: 0.5px; padding: 3px 8px; border-radius: 999px;
-    background: rgba(3, 14, 19, 0.72); backdrop-filter: blur(6px);
-  }
-  .coll-more {
-    grid-column: 1 / -1; padding: 38px 20px; text-align: center;
-    color: var(--muted); font-size: 12.5px; line-height: 1.7;
-  }
-  .coll-more b { color: var(--text); }
-  .filter-note {
-    font-size: 11px; color: var(--accent); background: rgba(0, 212, 255, 0.08);
-    border: 1px solid rgba(0, 212, 255, 0.22); border-radius: 999px;
-    padding: 5px 10px; max-width: 260px; white-space: nowrap;
-    overflow: hidden; text-overflow: ellipsis;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    gap: 22px 18px;
+    padding-bottom: 20px;
   }
 
-  /* Import view */
-  .import-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .coll { min-width: 0; cursor: pointer; }
+
+  .coll-cover {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 9px;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(145deg, #102a34, #0a171d);
+    border: 1px solid var(--line);
+    color: #3c7f91;
+    font-size: 44px;
+  }
+  .coll-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform .28s ease, opacity .2s ease;
+  }
+  .coll:hover .coll-cover img { transform: scale(1.035); }
+  .coll:hover .coll-cover { border-color: rgba(34, 211, 238, .3); }
+
+  .coll-badge {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    height: 18px;
+    padding: 0 6px;
+    display: inline-flex;
+    align-items: center;
+    border-radius: 3px;
+    background: rgba(5, 13, 18, .82);
+    border: 1px solid rgba(255, 255, 255, .1);
+    color: #9db6c1;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: .6px;
+    text-transform: uppercase;
+    backdrop-filter: none;
+  }
+  .coll-badge.src-vk { color: #8ab4ff; }
+  .coll-badge.src-yandex { color: #fcd34d; }
+  .coll-badge.src-spotify { color: #6ee7a0; }
+
+  .coll-body { padding: 9px 2px 0; }
+  .coll-title {
+    color: #d4e7ee;
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .coll-sub { margin-top: 2px; color: var(--muted-2); font-size: 11px; }
+
+  .coll-more {
+    grid-column: 1 / -1;
+    padding: 40px 20px;
+    border: 1px dashed #1c333e;
+    border-radius: 10px;
+    color: var(--muted-2);
+    font-size: 12px;
+    line-height: 1.7;
+    text-align: center;
+  }
+  .coll-more b { color: #9fb9c5; font-weight: 600; }
+
+  /* ---------- Import ---------- */
+  .import-intro {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: #0a171e;
+  }
+  .import-intro-icon {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    background: var(--cyan-soft);
+    color: var(--cyan);
+    font-size: 16px;
+  }
+  .import-intro b { display: block; color: #cfe6ee; font-size: 12.5px; font-weight: 600; }
+  .import-intro p { margin-top: 2px; color: var(--muted-2); font-size: 11.5px; }
+
   .import-tools {
-    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-    margin-bottom: 14px; padding: 11px 14px; border: 1px solid var(--stroke);
-    border-radius: 12px; background: rgba(6, 20, 27, 0.4);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
   }
-  .remember { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11.5px; cursor: pointer; }
-  .remember input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
-  .sync-btn {
-    border: 1px solid rgba(0, 212, 255, 0.3); border-radius: 9px;
-    background: rgba(0, 212, 255, 0.1); color: var(--accent);
-    font: inherit; font-size: 11px; padding: 6px 11px; cursor: pointer;
+
+  .check {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: #8ba5b2;
+    font-size: 12px;
+    cursor: pointer;
   }
-  .sync-btn:hover { background: rgba(0, 212, 255, 0.18); }
-  .sync-btn:disabled { opacity: 0.55; cursor: default; }
-  .saved-summary { margin-left: auto; font-size: 11px; color: var(--muted); }
-  .saved-note { font-size: 10.5px; color: #57d97f; min-height: 14px; }
-  .saved-note.empty { color: #628695; }
-  .link-card { margin: 0 0 16px; flex-shrink: 0; }
-  .link-card .sub { min-height: 0; }
-  .link-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-  .link-actions .card-status { flex: 1; min-width: 180px; }
-  #view-import { overflow-y: auto; padding-right: 4px; padding-bottom: 16px; }
-  #view-import > * { flex: 0 0 auto; }
-  #view-import .import-grid { flex: 0 0 auto; }
+  .check input { width: 14px; height: 14px; accent-color: var(--cyan); cursor: pointer; }
+
+  .saved-summary { color: var(--muted-2); font-size: 11.5px; margin-left: auto; }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+
   .card {
-    position: relative; overflow: hidden;
-    border: 1px solid var(--stroke); border-radius: var(--radius);
-    background: rgba(6, 20, 27, 0.55); padding: 20px;
-    display: flex; flex-direction: column; gap: 13px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 17px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #0a161d;
   }
-  .card::before {
-    content: ""; position: absolute; inset: 0 0 auto 0; height: 3px;
-    background: var(--brand, var(--accent));
+
+  .card-head { display: flex; align-items: center; gap: 10px; }
+  .card-icon {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: -.5px;
   }
-  .card.vk { --brand: linear-gradient(90deg, #4facfe, #00f2fe); }
-  .card.yandex { --brand: linear-gradient(90deg, #ffd75e, #ffb300); }
-  .card.spotify { --brand: linear-gradient(90deg, #1db954, #1ed760); }
-  .card h3 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 9px; }
-  .card .sub { margin: 0; font-size: 11.5px; color: var(--muted); line-height: 1.5; min-height: 34px; }
-  .field {
-    display: flex; align-items: center; gap: 8px;
-    border: 1px solid var(--stroke); border-radius: 10px;
-    background: rgba(2, 11, 15, 0.55); padding: 9px 11px;
+  .card-icon.vk { background: rgba(76, 139, 245, .12); color: #8ab4ff; border: 1px solid rgba(76, 139, 245, .2); }
+  .card-icon.yandex { background: rgba(251, 191, 36, .09); color: #fcd34d; border: 1px solid rgba(251, 191, 36, .18); }
+  .card-icon.spotify { background: rgba(30, 215, 96, .09); color: #6ee7a0; border: 1px solid rgba(30, 215, 96, .18); }
+
+  .card-name { font-size: 13px; font-weight: 650; color: #d8eaf1; }
+  .card-desc { margin-top: 1px; color: var(--muted-2); font-size: 10.5px; }
+
+  .token-row {
+    display: flex;
+    align-items: center;
+    margin-top: 15px;
+    height: 35px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: #081218;
+    overflow: hidden;
+    transition: border-color .14s ease;
   }
-  .field input {
-    flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
-    color: var(--text); font-size: 12px; font-family: inherit;
+  .token-row:focus-within { border-color: rgba(34, 211, 238, .45); }
+  .token-row input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    padding: 0 10px;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font-size: 11.5px;
+    letter-spacing: .2px;
   }
-  .field input::placeholder { color: #628695; }
-  .eye { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; }
-  .card .btn { justify-content: center; }
-  .card-status { font-size: 11px; min-height: 15px; color: var(--muted); }
-  .card-status.err { color: var(--danger); }
-  .card-status.ok { color: #57d97f; }
+  .token-row input::placeholder { color: #3f5a66; }
+  .eye {
+    width: 34px;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    color: #58727e;
+    font-size: 12px;
+    flex: 0 0 34px;
+  }
+  .eye:hover { color: var(--cyan); }
+
+  .card-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .card-actions .btn.primary { flex: 1; min-width: 88px; }
+
+  .card-help {
+    color: #5f7c89;
+    font-size: 10.5px;
+    text-decoration: none;
+    background: none;
+    border: 0;
+    padding: 4px 0;
+    cursor: pointer;
+  }
+  .card-help:hover { color: var(--cyan); }
+
+  .card-status {
+    margin-top: 11px;
+    min-height: 17px;
+    color: #5f7b88;
+    font-size: 10.5px;
+    line-height: 1.5;
+    word-break: break-word;
+  }
+  .card-status.ok { color: var(--green); }
+  .card-status.err { color: var(--red); }
+
+  .saved-note {
+    display: block;
+    margin-top: 7px;
+    color: #4e7988;
+    font-size: 10px;
+  }
+  .saved-note.empty { display: none; }
+
   .spin {
-    width: 13px; height: 13px; border-radius: 50%;
-    border: 2px solid rgba(0, 212, 255, 0.25); border-top-color: var(--accent);
-    animation: spin 0.8s linear infinite; display: inline-block;
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    margin-right: 4px;
+    border: 1.5px solid rgba(34, 211, 238, .25);
+    border-top-color: var(--cyan);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    vertical-align: -1px;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .dropzone {
-    margin-top: 16px; border: 1.5px dashed rgba(160, 212, 235, 0.25);
-    border-radius: var(--radius); padding: 16px; text-align: center;
-    color: var(--muted); font-size: 12px; transition: 0.2s;
+  .link-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: #0a161d;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
   }
-  .dropzone.hot { border-color: var(--accent); background: rgba(0, 212, 255, 0.07); color: var(--accent); }
+  .link-copy { min-width: 150px; flex: 1; }
+  .link-copy b { display: block; font-size: 12px; color: #cfe6ee; font-weight: 600; }
+  .link-copy span { color: var(--muted-2); font-size: 10.5px; }
+  .link-input {
+    width: min(360px, 100%);
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    outline: 0;
+    background: #081218;
+    font-size: 11.5px;
+  }
+  .link-input:focus { border-color: rgba(34, 211, 238, .45); }
+
+  .dropzone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    min-height: 52px;
+    margin-top: auto;
+    padding: 13px;
+    border: 1px dashed #1d3642;
+    border-radius: 9px;
+    color: #56727f;
+    font-size: 11.5px;
+    text-align: center;
+    transition: border-color .14s ease, background .14s ease, color .14s ease;
+  }
+  .dropzone.hot { border-color: var(--cyan); background: var(--cyan-soft); color: #a5f3fc; }
+  .dropzone b { color: #87a5b2; font-weight: 600; }
 
   /* ---------- Player ---------- */
   .player {
-    height: 92px; flex: 0 0 auto;
-    display: flex; align-items: center; gap: 18px;
-    padding: 0 24px;
-    border-top: 1px solid var(--stroke);
-    background: rgba(4, 14, 19, 0.72);
-    backdrop-filter: blur(18px);
+    flex: 0 0 84px;
+    display: grid;
+    grid-template-columns: minmax(210px, 1fr) minmax(340px, 1.5fr) minmax(150px, 240px);
+    align-items: center;
+    gap: 24px;
+    padding: 0 22px;
+    background: #09141a;
+    border-top: 1px solid var(--line);
+    position: relative;
+    z-index: 20;
   }
-  .np { display: flex; align-items: center; gap: 13px; width: 280px; min-width: 0; }
+
+  .np { display: flex; align-items: center; gap: 11px; min-width: 0; }
   .np-cover {
-    width: 54px; height: 54px; border-radius: 13px; flex: 0 0 auto;
-    background: linear-gradient(135deg, #123542, #1f5c74);
-    display: grid; place-items: center; font-size: 21px; color: var(--accent);
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+    width: 50px;
+    height: 50px;
+    flex: 0 0 50px;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 6px;
+    background: linear-gradient(145deg, #155e75, #0a2029);
+    border: 1px solid rgba(34, 211, 238, .18);
+    color: #8fe3f2;
+    font-size: 19px;
   }
   .np-text { min-width: 0; }
-  .np-title { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .np-artist { font-size: 11.5px; color: var(--muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .np-title {
+    color: #e2f1f7;
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .np-artist {
+    margin-top: 2px;
+    color: #67828f;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
-  .center-controls { flex: 1; max-width: 620px; margin: 0 auto; display: flex; flex-direction: column; gap: 7px; }
-  .controls { display: flex; align-items: center; justify-content: center; gap: 14px; }
+  .center-controls { min-width: 0; }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    height: 36px;
+  }
   .ctrl {
-    width: 38px; height: 38px; border: 0; border-radius: 50%;
-    background: transparent; color: var(--text); font-size: 16px; cursor: pointer;
-    transition: 0.15s; display: grid; place-items: center;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: #8aa4b0;
+    font-size: 13px;
+    transition: color .12s ease, background .12s ease;
   }
-  .ctrl:hover { background: var(--glass-strong); }
+  .ctrl:hover { color: #fff; background: #13242c; }
   .ctrl.play {
-    width: 46px; height: 46px; color: #032730;
-    background: linear-gradient(135deg, var(--accent-2), var(--accent));
-    box-shadow: 0 8px 24px rgba(0, 212, 255, 0.35);
-    font-size: 18px;
+    width: 34px;
+    height: 34px;
+    background: var(--cyan);
+    color: #04212a;
+    font-size: 12px;
+    padding-left: 1px;
   }
-  .ctrl.play:hover { filter: brightness(1.1); }
-  .ctrl:disabled { opacity: 0.35; cursor: default; }
+  .ctrl.play:hover { background: #67e8f9; color: #03181f; }
 
-  .seek-row { display: flex; align-items: center; gap: 10px; }
-  .time { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; width: 38px; }
+  .seek-row {
+    display: grid;
+    grid-template-columns: 38px 1fr 38px;
+    align-items: center;
+    gap: 9px;
+    margin-top: 2px;
+  }
+
+  .time {
+    color: #5d7885;
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+  }
   .time.right { text-align: right; }
 
-  input[type="range"] {
-    -webkit-appearance: none; appearance: none; width: 100%;
-    height: 4px; border-radius: 999px; outline: 0; cursor: pointer;
-    background: linear-gradient(90deg, var(--accent) var(--p, 0%), rgba(160, 212, 235, 0.18) var(--p, 0%));
+  input[type=range] {
+    --p: 0%;
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--cyan) var(--p), #1b303b var(--p));
+    cursor: pointer;
+    outline: none;
   }
-  input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
-    background: #fff; box-shadow: 0 0 10px rgba(0, 212, 255, 0.85);
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: #d8f8fd;
+    border: 0;
+    opacity: 0;
+    transition: opacity .12s ease;
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, .12);
   }
+  input[type=range]:hover::-webkit-slider-thumb { opacity: 1; }
 
-  .volume { display: flex; align-items: center; gap: 9px; width: 150px; justify-content: flex-end; }
-  .volume span { font-size: 14px; color: var(--muted); }
-  .volume input { width: 92px; --p: 80%; }
+  .volume { display: flex; align-items: center; justify-content: flex-end; gap: 9px; }
+  .volume span { width: 16px; color: #6d8793; font-size: 12px; text-align: center; }
+  .volume input[type=range] { width: 95px; }
 
-  /* Toast */
-  .toasts { position: fixed; right: 22px; bottom: 108px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
+  /* ---------- Toasts ---------- */
+  .toasts {
+    position: fixed;
+    right: 18px;
+    bottom: 100px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    pointer-events: none;
+  }
   .toast {
-    padding: 11px 15px; border-radius: 11px; font-size: 12px;
-    background: rgba(8, 27, 35, 0.94); border: 1px solid rgba(0, 212, 255, 0.35);
-    color: var(--text); box-shadow: var(--shadow);
-    animation: slide 0.25s ease;
+    max-width: 340px;
+    padding: 9px 13px;
+    border: 1px solid #20404e;
+    border-left: 2px solid var(--cyan);
+    border-radius: 7px;
+    background: #0d1d25;
+    color: #c7e1e9;
+    font-size: 11.5px;
+    line-height: 1.5;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .32);
+    animation: toastIn .2s ease both;
   }
-  .toast.err { border-color: rgba(255, 107, 129, 0.5); }
-  @keyframes slide { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+  .toast.bad { border-left-color: var(--red); color: #fecaca; }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(6px); } }
+
+  @media (max-width: 1160px) {
+    .cards { grid-template-columns: 1fr; }
+    .search { width: 210px; }
+    .player { grid-template-columns: minmax(180px, 1fr) minmax(300px, 1.5fr) 140px; gap: 16px; }
+  }
+
+  @media (max-width: 980px) {
+    .shell { grid-template-columns: 205px minmax(0, 1fr); }
+    .sidebar { padding-left: 10px; padding-right: 10px; }
+    .view { padding-left: 20px; padding-right: 20px; }
+    .hero-cover { width: 108px; height: 108px; flex-basis: 108px; font-size: 42px; }
+    .collection-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+    .player { grid-template-columns: minmax(170px, 1fr) minmax(280px, 1.4fr); }
+    .volume { display: none; }
+  }
 </style>
 </head>
 <body>
-  <div class="titlebar">
-    <div class="dot">♪</div>
-    <div class="name">SON<span>O</span>R</div>
-    <div class="spacer"></div>
-    <div class="win-actions">
-      <button class="win-btn" id="btn-min" title="Свернуть">‒</button>
-      <button class="win-btn" id="btn-max" title="Развернуть">□</button>
-      <button class="win-btn close" id="btn-close" title="Закрыть">✕</button>
-    </div>
+
+<div class="titlebar">
+  <div class="brand"><span class="brand-mark">♪</span>SONOR <span>MUSIC</span></div>
+  <div class="win-actions">
+    <button class="win-btn" id="btn-min" title="Свернуть" aria-label="Свернуть">—</button>
+    <button class="win-btn" id="btn-max" title="Развернуть" aria-label="Развернуть">□</button>
+    <button class="win-btn close" id="btn-close" title="Закрыть" aria-label="Закрыть">✕</button>
   </div>
+</div>
 
-  <div class="app">
-    <div class="shell">
-      <aside class="sidebar">
-        <div class="brand">
-          <div class="logo">♪</div>
-          <div>
-            <h1>SONOR</h1>
-            <p>MUSIC PLAYER</p>
-          </div>
+<div class="app">
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="profile">
+        <div class="avatar">S</div>
+        <div>
+          <div class="profile-name">Sonor</div>
+          <div class="profile-sub">Моя медиатека</div>
         </div>
+      </div>
 
-        <nav class="nav">
-          <div class="nav-label">Медиатека</div>
-          <button class="nav-btn active" data-view="library">
-            <span class="ico">☰</span> Библиотека
-            <span class="count" id="nav-count">0</span>
-          </button>
-          <button class="nav-btn" data-view="playlists">
-            <span class="ico">≡</span> Плейлисты
-            <span class="count" id="playlists-count">0</span>
-          </button>
-          <button class="nav-btn" data-view="albums">
-            <span class="ico">◫</span> Альбомы
-            <span class="count" id="albums-count">0</span>
-          </button>
-          <button class="nav-btn" data-view="import">
-            <span class="ico">⇩</span> Импорт музыки
-          </button>
-        </nav>
+      <div class="nav-label">Медиатека</div>
+      <nav class="nav">
+        <button class="nav-btn active" data-view="library">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12"/><path d="M4 19h16M9 9h6M9 13h4"/></svg>
+          Библиотека
+          <span class="nav-count" id="nav-count">0</span>
+        </button>
+        <button class="nav-btn" data-view="playlists">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h11M4 11h11M4 16h7"/><path d="M17 14v5.5a2.5 2.5 0 1 1-2.5-2.5H19V9l2-1v6"/></svg>
+          Плейлисты
+          <span class="nav-count" id="playlists-count">0</span>
+        </button>
+        <button class="nav-btn" data-view="albums">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          Альбомы
+          <span class="nav-count" id="albums-count">0</span>
+        </button>
+        <button class="nav-btn" data-view="import">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v11M8 10l4 4 4-4"/><path d="M5 16v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></svg>
+          Импорт музыки
+        </button>
+      </nav>
 
-        <div class="tip">
-          <b>Совет.</b> Перетащите аудиофайлы прямо в окно или нажмите
-          «Добавить файлы». Импорт из VK, Яндекс Музыки и Spotify — на вкладке
-          «Импорт музыки».
+      <div class="side-bottom">
+        <div class="side-tip">
+          <div class="side-tip-title">✦ Совет</div>
+          <p>Перетащите аудиофайлы в окно плеера — они сразу появятся в библиотеке.</p>
         </div>
-      </aside>
+        <div class="side-version">SONOR 1.2 · DESKTOP</div>
+      </div>
+    </aside>
 
-      <main>
-        <section class="view active" id="view-library">
-          <div class="view-head">
-            <button class="btn" id="btn-back" style="display: none">← Назад</button>
-            <div>
-              <h2 id="lib-title">Библиотека</h2>
-              <p id="lib-sub">Ваша коллекция треков</p>
-            </div>
-            <div class="grow"></div>
-            <div class="search">
-              <span>⌕</span>
-              <input id="search" type="text" placeholder="Поиск трека или исполнителя…" />
-            </div>
-            <button class="btn primary" id="btn-add">＋ Добавить файлы</button>
-          </div>
-
-          <div class="list-wrap" id="list-wrap">
-            <div class="empty" id="empty-state">
-              <div class="big">🎧</div>
-              <h3 id="empty-title">Пока пусто</h3>
-              <p id="empty-text">Добавьте локальные аудиофайлы или импортируйте музыку из VK, Яндекс Музыки и Spotify.</p>
-            </div>
-            <div id="rows"></div>
-          </div>
-
-          <div class="dropzone" id="dropzone">Перетащите аудиофайлы сюда — MP3, FLAC, WAV, M4A, OGG</div>
-        </section>
-
-        <section class="view" id="view-playlists">
-          <div class="view-head">
-            <div>
-              <h2>Плейлисты</h2>
-              <p>Плейлисты и любимые треки из подключённых сервисов</p>
-            </div>
-          </div>
-          <div class="collection-grid" id="playlists-grid"></div>
-        </section>
-
-        <section class="view" id="view-albums">
-          <div class="view-head">
-            <div>
-              <h2>Альбомы</h2>
-              <p>Сохранённые и любимые альбомы</p>
-            </div>
-          </div>
-          <div class="collection-grid" id="albums-grid"></div>
-        </section>
-
-        <section class="view" id="view-import">
-          <div class="view-head">
-            <div>
-              <h2>Импорт музыки</h2>
-              <p>Импортируется вся медиатека: плейлисты, любимые треки и альбомы</p>
-            </div>
-          </div>
-
-          <div class="import-tools">
-            <label class="remember">
-              <input type="checkbox" id="remember-tokens" checked />
-              <span>Запоминать токены и обновлять библиотеку при запуске</span>
+    <main class="main">
+      <!-- Library -->
+      <section id="view-library" class="view active">
+        <div class="view-top">
+          <div class="crumb">Медиатека <span>/</span> <b>Библиотека</b></div>
+          <div class="top-actions">
+            <button id="btn-back" class="btn ghost" style="display:none">← Назад</button>
+            <label class="search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <input id="search" type="text" placeholder="Поиск по трекам" autocomplete="off">
             </label>
-            <button class="sync-btn" id="sync-saved" style="display: none">Обновить сохранённые</button>
-            <span class="saved-summary" id="saved-summary"></span>
+            <button id="btn-add" class="btn primary">＋ Добавить</button>
           </div>
+        </div>
 
-          <div class="card link-card">
-            <div class="link-head">
+        <div class="hero">
+          <div class="hero-cover" id="hero-cover">♪</div>
+          <div class="hero-copy">
+            <div class="hero-kicker" id="hero-kicker">Медиатека</div>
+            <h1 id="lib-title">Библиотека</h1>
+            <p class="hero-sub" id="lib-sub">Ваша коллекция треков</p>
+            <div class="hero-meta">
+              <span class="pill cyan" id="hero-count">0 треков</span>
+              <span class="pill">VK · Яндекс · Spotify</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="list-wrap" id="list-wrap">
+          <div class="list-head">
+            <span style="text-align:center">#</span>
+            <span>Название</span>
+            <span>Источник</span>
+            <span class="ta-right">Время</span>
+            <span></span>
+          </div>
+          <div class="empty-state" id="empty-state">
+            <div class="empty-glyph">♫</div>
+            <div class="empty-title" id="empty-title">Пока пусто</div>
+            <div class="empty-text" id="empty-text">Добавьте локальные аудиофайлы или импортируйте музыку из VK, Яндекс Музыки и Spotify.</div>
+          </div>
+          <div id="rows"></div>
+        </div>
+      </section>
+
+      <!-- Playlists -->
+      <section id="view-playlists" class="view">
+        <div class="view-top">
+          <div class="crumb">Медиатека <span>/</span> <b>Плейлисты</b></div>
+          <div class="top-actions"><button class="btn" data-view="import">Импортировать</button></div>
+        </div>
+        <div class="page-head">
+          <div>
+            <h1>Плейлисты</h1>
+            <p>Сохранённые плейлисты и любимые треки из подключённых сервисов.</p>
+          </div>
+        </div>
+        <div class="collection-grid" id="playlists-grid"></div>
+      </section>
+
+      <!-- Albums -->
+      <section id="view-albums" class="view">
+        <div class="view-top">
+          <div class="crumb">Медиатека <span>/</span> <b>Альбомы</b></div>
+          <div class="top-actions"><button class="btn" data-view="import">Импортировать</button></div>
+        </div>
+        <div class="page-head">
+          <div>
+            <h1>Альбомы</h1>
+            <p>Альбомы, сохранённые в вашей медиатеке.</p>
+          </div>
+        </div>
+        <div class="collection-grid" id="albums-grid"></div>
+      </section>
+
+      <!-- Import -->
+      <section id="view-import" class="view">
+        <div class="view-top">
+          <div class="crumb">Медиатека <span>/</span> <b>Импорт</b></div>
+          <div class="top-actions"><button class="btn" data-view="library">← В библиотеку</button></div>
+        </div>
+        <div class="page-head">
+          <div>
+            <h1>Импорт музыки</h1>
+            <p>Подключите сервисы и перенесите треки, плейлисты и альбомы в одну библиотеку.</p>
+          </div>
+        </div>
+
+        <div class="import-intro">
+          <div class="import-intro-icon">↓</div>
+          <div>
+            <b>Токены хранятся только на этом компьютере</b>
+            <p>Sonor не отправляет их на свои серверы. Перед вводом проверьте токен кнопкой «Проверить».</p>
+          </div>
+        </div>
+
+        <div class="import-tools">
+          <label class="check"><input type="checkbox" id="remember-tokens" checked> Запомнить токены</label>
+          <button class="btn small" id="sync-saved" style="display:none">Обновить сохранённое</button>
+          <span class="saved-summary" id="saved-summary"></span>
+        </div>
+
+        <div class="cards">
+          <div class="card">
+            <div class="card-head">
+              <div class="card-icon vk">VK</div>
               <div>
-                <h3>🔗 Импорт по публичной ссылке</h3>
-                <p class="sub">
-                  Без токена: плейлист или альбом Spotify, плейлист/альбом Яндекс Музыки,
-                  M3U/PLS/XSPF или прямая аудиоссылка. Spotify отдаёт 30-секундные превью.
-                </p>
+                <div class="card-name">VK Музыка</div>
+                <div class="card-desc">Аудиозаписи и плейлисты</div>
               </div>
             </div>
-            <div class="field">
-              <input type="text" id="link-url" placeholder="https://open.spotify.com/playlist/…" />
+            <div class="token-row">
+              <input id="vk-token" type="password" placeholder="access_token" autocomplete="off" spellcheck="false">
+              <button class="eye" data-eye="vk-token" title="Показать токен">◉</button>
             </div>
-            <div class="link-actions">
-              <button class="btn" id="link-import">Импортировать по ссылке</button>
-              <div class="card-status" id="link-status"></div>
+            <div class="card-actions">
+              <button class="btn primary" id="vk-import">Импортировать</button>
+              <button class="btn small ghost" id="vk-check">Проверить</button>
+              <button class="card-help" data-external="https://dev.vk.com/ru/api/access-token/getting-started">Как получить →</button>
             </div>
+            <div class="card-status" id="vk-status"></div>
+            <div class="saved-note" id="vk-saved"></div>
           </div>
 
-          <div class="import-grid">
-            <div class="card vk">
-              <h3>🅥 VK Музыка</h3>
-              <p class="sub">Токен VK с доступом к аудио. Загрузим всю музыку и все плейлисты.</p>
-              <div class="field">
-                <input type="password" id="vk-token" placeholder="access_token" />
-                <button class="eye" data-eye="vk-token">👁</button>
+          <div class="card">
+            <div class="card-head">
+              <div class="card-icon yandex">Я</div>
+              <div>
+                <div class="card-name">Яндекс Музыка</div>
+                <div class="card-desc">Плейлисты, любимое и альбомы</div>
               </div>
-              <button class="btn" id="vk-import">Импортировать VK</button>
-              <div class="card-status" id="vk-status"></div>
-              <div class="saved-note" id="vk-saved"></div>
             </div>
-
-            <div class="card yandex">
-              <h3>🅨 Яндекс Музыка</h3>
-              <p class="sub">OAuth-токен Яндекс Музыки: плейлисты, «Мне нравится» и альбомы.</p>
-              <div class="field">
-                <input type="password" id="ya-token" placeholder="OAuth token" />
-                <button class="eye" data-eye="ya-token">👁</button>
-              </div>
-              <button class="btn" id="ya-import">Импортировать Яндекс</button>
-              <div class="card-status" id="ya-status"></div>
-              <div class="saved-note" id="ya-saved"></div>
+            <div class="token-row">
+              <input id="ya-token" type="password" placeholder="OAuth-токен" autocomplete="off" spellcheck="false">
+              <button class="eye" data-eye="ya-token" title="Показать токен">◉</button>
             </div>
-
-            <div class="card spotify">
-              <h3>🅢 Spotify</h3>
-              <p class="sub">Токен Spotify: плейлисты, любимые треки и сохранённые альбомы.</p>
-              <div class="field">
-                <input type="password" id="sp-token" placeholder="Bearer token" />
-                <button class="eye" data-eye="sp-token">👁</button>
-              </div>
-              <button class="btn" id="sp-import">Импортировать Spotify</button>
-              <div class="card-status" id="sp-status"></div>
-              <div class="saved-note" id="sp-saved"></div>
+            <div class="card-actions">
+              <button class="btn primary" id="ya-import">Импортировать</button>
+              <button class="btn small ghost" id="ya-check">Проверить</button>
+              <button class="card-help" data-external="https://yandex.ru/dev/id/doc/ru/tokens/debug-token">Как получить →</button>
             </div>
+            <div class="card-status" id="ya-status"></div>
+            <div class="saved-note" id="ya-saved"></div>
           </div>
 
-          <div class="dropzone" style="margin-top: 18px">
-            Импортируются плейлисты, любимые треки и альбомы целиком. Ссылки на треки
-            VK и Яндекс Музыки обновляются при повторном импорте; Spotify отдаёт
-            только 30-секундные превью.
+          <div class="card">
+            <div class="card-head">
+              <div class="card-icon spotify">S</div>
+              <div>
+                <div class="card-name">Spotify</div>
+                <div class="card-desc">Плейлисты и треки</div>
+              </div>
+            </div>
+            <div class="token-row">
+              <input id="sp-token" type="password" placeholder="access_token" autocomplete="off" spellcheck="false">
+              <button class="eye" data-eye="sp-token" title="Показать токен">◉</button>
+            </div>
+            <div class="card-actions">
+              <button class="btn primary" id="sp-import">Импортировать</button>
+              <button class="btn small ghost" id="sp-check">Проверить</button>
+              <button class="card-help" data-external="https://developer.spotify.com/documentation/web-api/concepts/access-token">Как получить →</button>
+            </div>
+            <div class="card-status" id="sp-status"></div>
+            <div class="saved-note" id="sp-saved"></div>
           </div>
-        </section>
-      </main>
-    </div>
-
-    <footer class="player">
-      <div class="np">
-        <div class="np-cover" id="np-cover">♪</div>
-        <div class="np-text">
-          <div class="np-title" id="np-title">Ничего не играет</div>
-          <div class="np-artist" id="np-artist">Выберите трек</div>
         </div>
-      </div>
 
-      <div class="center-controls">
-        <div class="controls">
-          <button class="ctrl" id="btn-prev" title="Предыдущий">⏮</button>
-          <button class="ctrl play" id="btn-play" title="Играть">▶</button>
-          <button class="ctrl" id="btn-next" title="Следующий">⏭</button>
+        <div class="link-card">
+          <div class="link-copy">
+            <b>Импорт по ссылке</b>
+            <span>Плейлист или трек из Яндекс Музыки, Spotify, VK</span>
+          </div>
+          <input class="link-input" id="link-url" type="text" placeholder="https://music.yandex.ru/playlists/…" autocomplete="off" spellcheck="false">
+          <button class="btn" id="link-import">Добавить</button>
+          <div class="card-status" id="link-status" style="flex-basis:100%;margin-top:0"></div>
         </div>
-        <div class="seek-row">
-          <span class="time" id="t-cur">0:00</span>
-          <input type="range" id="seek" min="0" max="100" value="0" step="0.1" />
-          <span class="time right" id="t-dur">0:00</span>
-        </div>
-      </div>
 
-      <div class="volume">
-        <span id="vol-icon">🔊</span>
-        <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" />
-      </div>
-    </footer>
+        <div class="dropzone" id="dropzone"><b>Перетащите аудиофайлы</b> сюда, чтобы добавить их в библиотеку</div>
+      </section>
+    </main>
   </div>
 
-  <div class="toasts" id="toasts"></div>
-  <input type="file" id="file-input" accept="audio/*" multiple hidden />
-  <audio id="audio"></audio>
+  <footer class="player">
+    <div class="np">
+      <div class="np-cover" id="np-cover">♪</div>
+      <div class="np-text">
+        <div class="np-title" id="np-title">Ничего не играет</div>
+        <div class="np-artist" id="np-artist">Выберите трек</div>
+      </div>
+    </div>
+
+    <div class="center-controls">
+      <div class="controls">
+        <button class="ctrl" id="btn-prev" title="Предыдущий">◀◀</button>
+        <button class="ctrl play" id="btn-play" title="Играть">▶</button>
+        <button class="ctrl" id="btn-next" title="Следующий">▶▶</button>
+      </div>
+      <div class="seek-row">
+        <span class="time" id="t-cur">0:00</span>
+        <input type="range" id="seek" min="0" max="100" step="0.1" value="0">
+        <span class="time right" id="t-dur">0:00</span>
+      </div>
+    </div>
+
+    <div class="volume">
+      <span id="vol-icon">🔊</span>
+      <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8">
+    </div>
+  </footer>
+</div>
+
+<div class="toasts" id="toasts"></div>
+<input type="file" id="file-input" accept="audio/*" multiple style="display:none">
+<audio id="audio" preload="metadata"></audio>
 
 <script>
 (function () {
@@ -633,6 +1332,7 @@
     if (!el) return;
     el.addEventListener("click", function () {
       if (ipc) ipc.send(channel);
+      else if (channel === "close-window") window.close();
     });
   }
   wire("btn-min", "minimize-window");
@@ -647,6 +1347,7 @@
   var activeCollectionId = null;
   var visibleLimit = 300;
   var saveTimer = null;
+  var searchTimer = null;
   var playRequest = 0;
   var importStatus = {};
 
@@ -728,11 +1429,11 @@
     if (!ipc) return;
     clearTimeout(saveTimer);
     var payloadTracks = tracks
-      .filter(function (t) { return t.source !== "local"; })
+      .filter(function (t) { return t.source !== "local" || t.path; })
       .map(function (t) {
         var copy = {};
         Object.keys(t).forEach(function (key) {
-          if (key !== "src") copy[key] = t[key];
+          if (key !== "src" && key !== "uri") copy[key] = t[key];
         });
         return copy;
       });
@@ -740,6 +1441,15 @@
       tracks: payloadTracks,
       collections: collections
     }).catch(function () { /* сохранение не должно мешать работе */ });
+  }
+
+  function localFileUrl(filePath) {
+    if (!filePath) return null;
+    try {
+      return require("url").pathToFileURL(filePath).href;
+    } catch (err) {
+      return null;
+    }
   }
 
   function loadLibrary() {
@@ -751,7 +1461,7 @@
         tracks.forEach(function (t) { known[t.id] = true; });
         (data.tracks || []).forEach(function (t) {
           if (!t || !t.id || known[t.id]) return;
-          t.src = t.url || null;
+          t.src = t.url || localFileUrl(t.path) || null;
           known[t.id] = true;
           tracks.push(t);
         });
@@ -793,17 +1503,34 @@
     $("nav-count").textContent = tracks.length;
     $("btn-back").style.display = collection ? "inline-flex" : "none";
 
+    var cover = $("hero-cover");
+    cover.innerHTML = "";
     if (collection) {
+      $("hero-kicker").textContent =
+        (collection.type === "album" ? "Альбом" : "Плейлист") + " · " +
+        (SOURCE_NAMES[collection.source] || "Импорт");
       $("lib-title").textContent = collection.title;
       $("lib-sub").textContent = filtered.length + " " +
         plural(filtered.length, "трек", "трека", "треков") + " · " +
         (SOURCE_NAMES[collection.source] || "ИМПОРТ");
+      if (collection.image) {
+        var heroImg = document.createElement("img");
+        heroImg.src = collection.image;
+        heroImg.loading = "lazy";
+        cover.appendChild(heroImg);
+      } else {
+        cover.textContent = collection.type === "album" ? "◉" : "♫";
+      }
     } else {
+      $("hero-kicker").textContent = "Медиатека";
       $("lib-title").textContent = "Библиотека";
       $("lib-sub").textContent = tracks.length
-        ? "Треков в коллекции: " + tracks.length
+        ? "Все треки в одном месте — локальные файлы и подключённые сервисы"
         : "Ваша коллекция треков";
+      cover.textContent = "♪";
     }
+    $("hero-count").textContent = filtered.length + " " +
+      plural(filtered.length, "трек", "трека", "треков");
 
     var emptyTitle = "Пока пусто";
     var emptyText = "Добавьте локальные аудиофайлы или импортируйте музыку из VK, Яндекс Музыки и Spotify.";
@@ -819,10 +1546,13 @@
     $("empty-state").style.display = filtered.length ? "none" : "flex";
 
     var shown = filtered.slice(0, visibleLimit);
+    var fragment = document.createDocumentFragment();
 
     shown.forEach(function (t, i) {
       var row = document.createElement("div");
       row.className = "row" + (t === tracks[current] ? " playing" : "");
+      row.dataset.id = t.id;
+      row.dataset.index = String(i + 1);
 
       var num = document.createElement("div");
       num.className = "r-num";
@@ -880,8 +1610,9 @@
       row.appendChild(dur);
       row.appendChild(del);
       row.addEventListener("click", function () { playTrack(t); });
-      rows.appendChild(row);
+      fragment.appendChild(row);
     });
+    rows.appendChild(fragment);
 
     if (filtered.length > shown.length) {
       var more = document.createElement("div");
@@ -980,6 +1711,31 @@
     renderCollections();
   }
 
+  function markPlayingRows() {
+    var playing = tracks[current];
+    var playingId = playing ? playing.id : "";
+    var rows = document.querySelectorAll("#rows .row");
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      var active = row.dataset.id === playingId;
+      row.classList.toggle("playing", active);
+      var num = row.querySelector(".r-num");
+      if (num) num.textContent = active ? "▶" : (row.dataset.index || "");
+    }
+  }
+
+  function updateRowDuration(track) {
+    if (!track) return;
+    var rows = document.querySelectorAll("#rows .row");
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].dataset.id === track.id) {
+        var dur = rows[i].querySelector(".r-dur");
+        if (dur) dur.textContent = track.duration ? fmt(track.duration) : "—";
+        return;
+      }
+    }
+  }
+
   function updateNowPlaying() {
     var t = tracks[current];
     $("np-title").textContent = t ? t.title : "Ничего не играет";
@@ -996,7 +1752,7 @@
       $("np-cover").textContent = "♪";
     }
     $("btn-play").textContent = audio.paused ? "▶" : "⏸";
-    render();
+    markPlayingRows();
   }
 
   // ---------- Playback ----------
@@ -1106,7 +1862,9 @@
     visibleLimit = 300;
 
     Array.prototype.forEach.call(fileList, function (file) {
-      if (!file.type || file.type.indexOf("audio") !== 0) return;
+      var isAudio = (file.type && file.type.indexOf("audio") === 0) ||
+        /\.(mp3|flac|wav|m4a|aac|ogg|oga|opus|wma|aiff?|alac)$/i.test(file.name || "");
+      if (!isAudio) return;
       var meta = prettyName(file.name);
       tracks.push({
         id: "local_" + Date.now() + "_" + Math.random().toString(36).slice(2),
@@ -1114,6 +1872,7 @@
         artist: meta.artist,
         album: "",
         src: URL.createObjectURL(file),
+        path: file.path || null,
         duration: 0,
         source: "local"
       });
@@ -1122,6 +1881,7 @@
 
     if (!added) { toast("Аудиофайлы не найдены", true); return; }
     renderAll();
+    scheduleSave();
     toast("Добавлено треков: " + added);
     if (current === -1 && tracks.length) playTrack(tracks[0]);
   }
@@ -1146,7 +1906,7 @@
     showView("library");
   }
 
-  document.querySelectorAll(".nav-btn").forEach(function (btn) {
+  document.querySelectorAll("[data-view]").forEach(function (btn) {
     btn.addEventListener("click", function () { showView(btn.dataset.view); });
   });
 
@@ -1162,6 +1922,35 @@
     var el = $(id);
     el.className = "card-status" + (kind ? " " + kind : "");
     el.innerHTML = text;
+  }
+
+  function checkToken(service, tokenId, statusId, button) {
+    var token = ($(tokenId).value || "").trim();
+    var useSaved = !token && savedServices.indexOf(service) !== -1;
+    if (!token && !useSaved) {
+      setStatus(statusId, "Вставьте токен, чтобы проверить подключение", "err");
+      $(tokenId).focus();
+      return;
+    }
+    if (!ipc) {
+      setStatus(statusId, "Проверка доступна только в приложении", "err");
+      return;
+    }
+
+    button.disabled = true;
+    setStatus(statusId, '<span class="spin"></span> Проверяем токен…');
+    ipc.invoke("check-token", { service: service, token: token, saved: useSaved })
+      .then(function (result) {
+        if (!result || !result.ok) throw new Error((result && result.error) || "Токен недействителен");
+        var account = result.account || {};
+        var name = account.name || account.login || account.id || "аккаунт";
+        setStatus(statusId, "✓ Подключено: " + esc(name), "ok");
+        if (account.id) $(tokenId).dataset.account = account.id;
+      })
+      .catch(function (err) {
+        setStatus(statusId, "✕ " + esc(err && err.message ? err.message : err), "err");
+      })
+      .then(function () { button.disabled = false; });
   }
 
   function statsText(stats) {
@@ -1222,7 +2011,7 @@
           var input = $(service === "yandex" ? "ya-token" : service === "spotify" ? "sp-token" : "vk-token");
           var saved = savedServices.indexOf(service) !== -1;
           if (note) {
-            note.textContent = saved ? "🔒 Токен сохранён — автозагрузка включена" : "";
+            note.textContent = saved ? "● Токен сохранён — автозагрузка включена" : "";
             note.className = "saved-note" + (saved ? "" : " empty");
           }
           if (input) {
@@ -1231,7 +2020,7 @@
               : (service === "vk" ? "access_token" : service === "yandex" ? "OAuth token" : "Bearer token");
           }
         });
-        $("sync-saved").style.display = savedServices.length ? "inline-block" : "none";
+        $("sync-saved").style.display = savedServices.length ? "inline-flex" : "none";
         $("saved-summary").textContent = savedServices.length
           ? savedServices.map(function (s) { return SERVICE_LABELS[s] || s; }).join(" · ") + " сохранены"
           : (data && data.encryptionAvailable === false
@@ -1388,6 +2177,15 @@
   $("sp-import").addEventListener("click", function () {
     importTracks("spotify", "sp-token", "sp-status", this);
   });
+  $("vk-check").addEventListener("click", function () {
+    checkToken("vk", "vk-token", "vk-status", this);
+  });
+  $("ya-check").addEventListener("click", function () {
+    checkToken("yandex", "ya-token", "ya-status", this);
+  });
+  $("sp-check").addEventListener("click", function () {
+    checkToken("spotify", "sp-token", "sp-status", this);
+  });
   $("link-import").addEventListener("click", importLink);
   $("sync-saved").addEventListener("click", function () { syncSaved(true); });
 
@@ -1395,6 +2193,15 @@
     b.addEventListener("click", function () {
       var inp = $(b.dataset.eye);
       inp.type = inp.type === "password" ? "text" : "password";
+    });
+  });
+
+  document.querySelectorAll("[data-external]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var url = btn.dataset.external;
+      if (!url) return;
+      if (ipc) ipc.invoke("open-external", url);
+      else window.open(url, "_blank", "noopener");
     });
   });
 
@@ -1424,7 +2231,7 @@
     var t = tracks[current];
     if (t && isFinite(audio.duration)) t.duration = audio.duration;
     $("t-dur").textContent = fmt(audio.duration);
-    render();
+    updateRowDuration(t);
   });
   audio.addEventListener("timeupdate", function () {
     var d = audio.duration || 0;
@@ -1459,8 +2266,11 @@
     this.value = "";
   });
   $("search").addEventListener("input", function () {
-    visibleLimit = 300;
-    render();
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () {
+      visibleLimit = 300;
+      render();
+    }, 110);
   });
 
   // Drag & drop

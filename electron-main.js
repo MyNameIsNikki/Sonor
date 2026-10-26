@@ -1,8 +1,14 @@
-const { app, BrowserWindow, ipcMain, Menu, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, screen, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { importService, importPublicLink, resolveYandexStream } = require('./src/services/importers');
+const { importService, importPublicLink, resolveYandexStream, checkToken } = require('./src/services/importers');
 const tokenStore = require('./src/services/tokenStore');
+
+// Стабильная папка данных: не зависит от имени исполняемого файла и
+// productName в установщике, поэтому библиотека переживает обновления.
+app.setName('Sonor');
+const dataRoot = path.join(app.getPath('appData'), 'Sonor');
+app.setPath('userData', dataRoot);
 
 let mainWindow;
 
@@ -55,7 +61,35 @@ function createWindow() {
   });
 }
 
+function migrateLegacyData() {
+  const legacyNames = ['Sonor Music Player', 'electron', 'sonor', 'SonorMusicPlayer'];
+  const appData = app.getPath('appData');
+  ['library.json', 'tokens.json'].forEach(function (file) {
+    const target = path.join(dataRoot, file);
+    if (fs.existsSync(target)) return;
+
+    let newest = null;
+    legacyNames.forEach(function (name) {
+      const source = path.join(appData, name, file);
+      try {
+        const stat = fs.statSync(source);
+        if (!newest || stat.mtimeMs > newest.mtimeMs) newest = { source: source, mtimeMs: stat.mtimeMs };
+      } catch (err) { /* нет файла — пропускаем */ }
+    });
+
+    if (!newest) return;
+    try {
+      fs.mkdirSync(dataRoot, { recursive: true });
+      fs.copyFileSync(newest.source, target);
+      console.log('Перенесены данные из ' + newest.source);
+    } catch (err) {
+      console.error('Не удалось перенести ' + file + ':', err.message);
+    }
+  });
+}
+
 app.whenReady().then(() => {
+  migrateLegacyData();
   const storedTokens = tokenStore.loadTokens();
   Object.keys(storedTokens).forEach(function (service) {
     if (storedTokens[service]) importTokens.set(service, storedTokens[service]);
@@ -91,6 +125,28 @@ ipcMain.on('close-window', () => {
   if (mainWindow) mainWindow.close();
 });
 
+// ---------- External links & auth ----------
+ipcMain.handle('open-external', async (event, url) => {
+  const value = String(url || '');
+  if (!/^https?:\/\//i.test(value)) return { ok: false };
+  await shell.openExternal(value);
+  return { ok: true };
+});
+
+ipcMain.handle('check-token', async (event, payload) => {
+  const service = payload && payload.service;
+  let token = payload && payload.token;
+  try {
+    if (!token && payload && payload.saved) {
+      token = tokenStore.loadTokens()[service];
+    }
+    const account = await checkToken(service, token);
+    return { ok: true, account: account };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
 // ---------- Persistence ----------
 function libraryFile() {
   return path.join(app.getPath('userData'), 'library.json');
@@ -110,6 +166,7 @@ function sanitizeTrack(track) {
     album: String(track.album || ''),
     duration: Number(track.duration) || 0,
     url: track.url || null,
+    path: track.path ? String(track.path) : null,
     image: track.image || null,
     source: String(track.source || ''),
     provider: track.provider ? String(track.provider) : null,
@@ -219,7 +276,8 @@ ipcMain.handle('import-music', async (event, payload) => {
       }
     } else {
       await tokenStore.removeToken(service).catch(function () {});
-      importTokens.delete(service);
+      // Оставляем токен в памяти до закрытия приложения: он нужен для
+      // получения свежих ссылок на треки во время текущей сессии.
     }
   }
 
