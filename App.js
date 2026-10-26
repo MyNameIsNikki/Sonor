@@ -50,6 +50,7 @@ export default function App() {
   const [activeCollectionId, setActiveCollectionId] = useState(null);
   const [resolvingTrackId, setResolvingTrackId] = useState(null);
   const [libraryReady, setLibraryReady] = useState(false);
+  const [visibleLimit, setVisibleLimit] = useState(300);
 
   const tokensRef = useRef({});
   const nextTrackRef = useRef(null);
@@ -117,6 +118,11 @@ export default function App() {
   const activeCollection = useMemo(
     () => collections.find((item) => item.id === activeCollectionId) || null,
     [collections, activeCollectionId]
+  );
+
+  const displayedTracks = useMemo(
+    () => visibleTracks.slice(0, visibleLimit),
+    [visibleTracks, visibleLimit]
   );
 
   const playlistCollections = useMemo(
@@ -301,6 +307,7 @@ export default function App() {
     ]);
     setActiveCollectionId(null);
     setActiveTab('all');
+    setVisibleLimit(300);
     setShowImport(false);
     scrollRef.current?.scrollTo({ y: 0, animated: true });
 
@@ -317,12 +324,14 @@ export default function App() {
 
   const openCollection = (collection) => {
     setActiveCollectionId(collection.id);
+    setVisibleLimit(300);
     scrollRef.current?.scrollTo({ y: 0, animated: true });
   };
 
   const switchTab = (tab) => {
     setActiveTab(tab);
     setActiveCollectionId(null);
+    setVisibleLimit(300);
     scrollRef.current?.scrollTo({ y: 0, animated: true });
   };
 
@@ -347,10 +356,21 @@ export default function App() {
             </Text>
           </View>
           <TrackList
-            tracks={visibleTracks}
+            tracks={displayedTracks}
             onPlayTrack={handlePlayTrack}
             currentTrack={currentTrack}
           />
+          {visibleTracks.length > displayedTracks.length && (
+            <TouchableOpacity
+              style={styles.moreButton}
+              onPress={() => setVisibleLimit((value) => value + 300)}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.moreText}>
+                Показать ещё 300 · всего {visibleTracks.length}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       );
     }
@@ -382,7 +402,22 @@ export default function App() {
     return (
       <View>
         <Text style={styles.sectionTitle}>Мои треки ({tracks.length})</Text>
-        <TrackList tracks={tracks} onPlayTrack={handlePlayTrack} currentTrack={currentTrack} />
+        <TrackList
+          tracks={displayedTracks}
+          onPlayTrack={handlePlayTrack}
+          currentTrack={currentTrack}
+        />
+        {visibleTracks.length > displayedTracks.length && (
+          <TouchableOpacity
+            style={styles.moreButton}
+            onPress={() => setVisibleLimit((value) => value + 300)}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.moreText}>
+              Показать ещё 300 · всего {visibleTracks.length}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   };
@@ -627,6 +662,22 @@ const styles = StyleSheet.create({
   collectionCount: {
     fontSize: 11.5,
     color: '#7fa6b8'
+  },
+  moreButton: {
+    alignSelf: 'center',
+    paddingVertical: 11,
+    paddingHorizontal: 18,
+    marginTop: 6,
+    marginBottom: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 212, 255, 0.35)',
+    backgroundColor: 'rgba(0, 212, 255, 0.08)'
+  },
+  moreText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#8fd8f0'
   },
   playerWrapper: {
     position: 'absolute',
