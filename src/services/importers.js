@@ -969,9 +969,17 @@ async function importSpotifyPublicLink(link, builder) {
   let entity;
   try {
     const data = JSON.parse(script[1]);
-    entity = data && data.props && data.props.pageProps && data.props.pageProps.state &&
-      data.props.pageProps.state.data && data.props.pageProps.state.data.entity;
+    const pageProps = data && data.props && data.props.pageProps;
+    if (pageProps && pageProps.status) {
+      throw new Error(
+        'Spotify недоступен в вашем регионе (код ' + pageProps.status + '). ' +
+        'Попробуйте VPN или импорт с токеном.'
+      );
+    }
+    entity = pageProps && pageProps.state &&
+      pageProps.state.data && pageProps.state.data.entity;
   } catch (err) {
+    if (err && err.message && err.message.indexOf('Spotify недоступен') === 0) throw err;
     throw new Error('Не удалось разобрать ответ Spotify');
   }
   if (!entity) throw new Error('Публичная страница Spotify пуста или недоступна');

@@ -912,7 +912,7 @@ async function importSpotifyPublicLink(link, builder) {
   const kind = match[1];
   const id = match[2];
   const html = await requestText(`https://open.spotify.com/embed/${kind}/${id}`, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/124 Mobile Safari/537.36' }
+    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36' }
   });
   const script = html.match(/<script[^>]+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
   if (!script) throw new Error('Spotify не вернул данные публичной страницы');
@@ -920,14 +920,19 @@ async function importSpotifyPublicLink(link, builder) {
   let entity;
   try {
     const data = JSON.parse(script[1]);
+    const pageProps = data && data.props && data.props.pageProps;
+    if (pageProps && pageProps.status) {
+      throw new Error(
+        `Spotify недоступен в вашем регионе (код ${pageProps.status}). Попробуйте VPN или импорт с токеном.`
+      );
+    }
     entity =
-      data &&
-      data.props &&
-      data.props.pageProps &&
-      data.props.pageProps.state &&
-      data.props.pageProps.state.data &&
-      data.props.pageProps.state.data.entity;
+      pageProps &&
+      pageProps.state &&
+      pageProps.state.data &&
+      pageProps.state.data.entity;
   } catch (error) {
+    if (error && error.message && error.message.indexOf('Spotify недоступен') === 0) throw error;
     throw new Error('Не удалось разобрать ответ Spotify');
   }
   if (!entity) throw new Error('Публичная страница Spotify пуста или недоступна');

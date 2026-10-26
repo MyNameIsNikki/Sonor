@@ -6,7 +6,8 @@ const tokenStore = require('./src/services/tokenStore');
 
 let mainWindow;
 
-// Токены живут только в памяти процесса и никогда не пишутся на диск.
+// Рабочая копия токенов в памяти. На диск они попадают только по желанию
+// пользователя — в зашифрованном виде через tokenStore.
 const importTokens = new Map();
 
 function createWindow() {
@@ -209,8 +210,8 @@ ipcMain.handle('import-music', async (event, payload) => {
     reportProgress(event, progress);
   });
 
-  if (provided) {
-    if (remember) {
+  if (provided || !remember) {
+    if (remember && provided) {
       try {
         await tokenStore.saveToken(service, token);
       } catch (err) {

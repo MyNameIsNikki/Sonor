@@ -25,8 +25,8 @@ const TrackList = ({ tracks, onPlayTrack, currentTrack }) => {
         <Text style={styles.emptyIcon}>🎧</Text>
         <Text style={styles.emptyText}>Нет треков</Text>
         <Text style={styles.emptySubtext}>
-          Импортируйте музыку из VK, Яндекс Музыки или Spotify, либо добавьте
-          локальные файлы на устройстве
+          Импортируйте музыку из VK, Яндекс Музыки или Spotify, добавьте публичную
+          ссылку либо локальные файлы на устройстве
         </Text>
       </View>
     );
