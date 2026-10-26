@@ -7,7 +7,8 @@ const SOURCE_LABELS = {
   local: 'ЛОКАЛЬНО',
   vk: 'VK',
   yandex: 'ЯНДЕКС',
-  spotify: 'SPOTIFY'
+  spotify: 'SPOTIFY',
+  link: 'ССЫЛКА'
 };
 
 const TrackList = ({ tracks, onPlayTrack, currentTrack }) => {
@@ -63,7 +64,9 @@ const TrackList = ({ tracks, onPlayTrack, currentTrack }) => {
                     </Text>
                     {item.source ? (
                       <Text style={styles.sourceBadge}>
-                        {SOURCE_LABELS[item.source] || item.source}
+                        {item.source === 'link' && item.provider
+                          ? SOURCE_LABELS[item.provider] || SOURCE_LABELS.link
+                          : SOURCE_LABELS[item.source] || item.source}
                       </Text>
                     ) : null}
                   </View>

@@ -1,7 +1,8 @@
 const { app, BrowserWindow, ipcMain, Menu, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { importService, resolveYandexStream } = require('./src/services/importers');
+const { importService, importPublicLink, resolveYandexStream } = require('./src/services/importers');
+const tokenStore = require('./src/services/tokenStore');
 
 let mainWindow;
 
@@ -54,6 +55,11 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  const storedTokens = tokenStore.loadTokens();
+  Object.keys(storedTokens).forEach(function (service) {
+    if (storedTokens[service]) importTokens.set(service, storedTokens[service]);
+  });
+
   createWindow();
 
   app.on('activate', () => {
@@ -104,7 +110,10 @@ function sanitizeTrack(track) {
     duration: Number(track.duration) || 0,
     url: track.url || null,
     image: track.image || null,
-    source: String(track.source || '')
+    source: String(track.source || ''),
+    provider: track.provider ? String(track.provider) : null,
+    origin: track.origin ? String(track.origin) : null,
+    public: track.public === true
   };
 }
 
@@ -175,30 +184,99 @@ ipcMain.handle('save-library', async (event, payload) => {
 });
 
 // ---------- Import ----------
+function reportProgress(event, progress) {
+  if (event.sender && !event.sender.isDestroyed()) {
+    event.sender.send('import-progress', progress);
+  }
+}
+
 ipcMain.handle('import-music', async (event, payload) => {
   const service = payload && payload.service;
-  const token = payload && payload.token && String(payload.token).trim();
+  const provided = payload && payload.token && String(payload.token).trim();
+  const remember = payload && payload.remember !== false;
 
-  if (!token) throw new Error('Токен не указан');
   if (['vk', 'yandex', 'spotify'].indexOf(service) === -1) {
     throw new Error('Неизвестный сервис: ' + service);
   }
 
+  const saved = tokenStore.loadTokens()[service];
+  const token = provided || saved;
+  if (!token) throw new Error('Токен не указан');
+
   importTokens.set(service, token);
 
-  return importService(service, token, function (progress) {
-    if (event.sender && !event.sender.isDestroyed()) {
-      event.sender.send('import-progress', progress);
-    }
+  const result = await importService(service, token, function (progress) {
+    reportProgress(event, progress);
   });
+
+  if (provided) {
+    if (remember) {
+      try {
+        await tokenStore.saveToken(service, token);
+      } catch (err) {
+        result.warnings = (result.warnings || []).concat('Токен не сохранён: ' + err.message);
+      }
+    } else {
+      await tokenStore.removeToken(service).catch(function () {});
+      importTokens.delete(service);
+    }
+  }
+
+  result.remembered = tokenStore.savedServices().indexOf(service) !== -1;
+  return result;
+});
+
+ipcMain.handle('import-link', async (event, payload) => {
+  const link = payload && payload.url;
+  return importPublicLink(link, function (progress) {
+    reportProgress(event, progress);
+  });
+});
+
+ipcMain.handle('get-saved-services', async () => {
+  return {
+    services: tokenStore.savedServices(),
+    encryptionAvailable: tokenStore.encryptionAvailable()
+  };
+});
+
+ipcMain.handle('forget-token', async (event, payload) => {
+  const service = payload && payload.service;
+  if (tokenStore.SERVICES.indexOf(service) === -1) throw new Error('Неизвестный сервис');
+  await tokenStore.removeToken(service);
+  importTokens.delete(service);
+  return { services: tokenStore.savedServices() };
+});
+
+ipcMain.handle('sync-saved', async (event) => {
+  const tokens = tokenStore.loadTokens();
+  const services = Object.keys(tokens).filter(function (service) {
+    return !!tokens[service] && ['vk', 'yandex', 'spotify'].indexOf(service) !== -1;
+  });
+  if (!services.length) return { results: {}, errors: {}, services: [] };
+
+  const results = {};
+  const errors = {};
+  for (let i = 0; i < services.length; i++) {
+    const service = services[i];
+    importTokens.set(service, tokens[service]);
+    try {
+      results[service] = await importService(service, tokens[service], function (progress) {
+        reportProgress(event, progress);
+      });
+    } catch (err) {
+      errors[service] = err.message || String(err);
+    }
+  }
+  return { results: results, errors: errors, services: services };
 });
 
 ipcMain.handle('resolve-track-url', async (event, payload) => {
   const id = payload && payload.id;
   if (!id) throw new Error('Не указан идентификатор трека');
 
-  const token = importTokens.get('yandex');
-  if (!token) {
+  const token = importTokens.get('yandex') || null;
+  if (!token && !(payload && payload.public)) {
     throw new Error('Ссылки Яндекс Музыки истекли. Импортируйте музыку заново.');
   }
 

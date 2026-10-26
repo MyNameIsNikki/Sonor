@@ -6,7 +6,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 const SOURCE_LABELS = {
   vk: 'VK',
   yandex: 'ЯНДЕКС',
-  spotify: 'SPOTIFY'
+  spotify: 'SPOTIFY',
+  link: 'ССЫЛКА'
 };
 
 const CollectionGrid = ({ collections, kind, onOpen }) => {

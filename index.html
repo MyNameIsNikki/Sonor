@@ -196,6 +196,7 @@
   .src-vk { background: rgba(79, 172, 254, 0.14); color: #7cc7ff; }
   .src-yandex { background: rgba(255, 204, 0, 0.12); color: #ffd75e; }
   .src-spotify { background: rgba(29, 185, 84, 0.13); color: #57d97f; }
+  .src-link { background: rgba(160, 196, 216, 0.12); color: #b7d8e8; }
   .r-dur { font-size: 11.5px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
   .r-del {
     border: 0; background: transparent; color: #6f93a3;
@@ -271,6 +272,30 @@
 
   /* Import view */
   .import-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .import-tools {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 14px; padding: 11px 14px; border: 1px solid var(--stroke);
+    border-radius: 12px; background: rgba(6, 20, 27, 0.4);
+  }
+  .remember { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11.5px; cursor: pointer; }
+  .remember input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+  .sync-btn {
+    border: 1px solid rgba(0, 212, 255, 0.3); border-radius: 9px;
+    background: rgba(0, 212, 255, 0.1); color: var(--accent);
+    font: inherit; font-size: 11px; padding: 6px 11px; cursor: pointer;
+  }
+  .sync-btn:hover { background: rgba(0, 212, 255, 0.18); }
+  .sync-btn:disabled { opacity: 0.55; cursor: default; }
+  .saved-summary { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .saved-note { font-size: 10.5px; color: #57d97f; min-height: 14px; }
+  .saved-note.empty { color: #628695; }
+  .link-card { margin: 0 0 16px; flex-shrink: 0; }
+  .link-card .sub { min-height: 0; }
+  .link-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .link-actions .card-status { flex: 1; min-width: 180px; }
+  #view-import { overflow-y: auto; padding-right: 4px; padding-bottom: 16px; }
+  #view-import > * { flex: 0 0 auto; }
+  #view-import .import-grid { flex: 0 0 auto; }
   .card {
     position: relative; overflow: hidden;
     border: 1px solid var(--stroke); border-radius: var(--radius);
@@ -487,6 +512,34 @@
             </div>
           </div>
 
+          <div class="import-tools">
+            <label class="remember">
+              <input type="checkbox" id="remember-tokens" checked />
+              <span>Запоминать токены и обновлять библиотеку при запуске</span>
+            </label>
+            <button class="sync-btn" id="sync-saved" style="display: none">Обновить сохранённые</button>
+            <span class="saved-summary" id="saved-summary"></span>
+          </div>
+
+          <div class="card link-card">
+            <div class="link-head">
+              <div>
+                <h3>🔗 Импорт по публичной ссылке</h3>
+                <p class="sub">
+                  Без токена: плейлист или альбом Spotify, плейлист/альбом Яндекс Музыки,
+                  M3U/PLS/XSPF или прямая аудиоссылка. Spotify отдаёт 30-секундные превью.
+                </p>
+              </div>
+            </div>
+            <div class="field">
+              <input type="text" id="link-url" placeholder="https://open.spotify.com/playlist/…" />
+            </div>
+            <div class="link-actions">
+              <button class="btn" id="link-import">Импортировать по ссылке</button>
+              <div class="card-status" id="link-status"></div>
+            </div>
+          </div>
+
           <div class="import-grid">
             <div class="card vk">
               <h3>🅥 VK Музыка</h3>
@@ -497,6 +550,7 @@
               </div>
               <button class="btn" id="vk-import">Импортировать VK</button>
               <div class="card-status" id="vk-status"></div>
+              <div class="saved-note" id="vk-saved"></div>
             </div>
 
             <div class="card yandex">
@@ -508,6 +562,7 @@
               </div>
               <button class="btn" id="ya-import">Импортировать Яндекс</button>
               <div class="card-status" id="ya-status"></div>
+              <div class="saved-note" id="ya-saved"></div>
             </div>
 
             <div class="card spotify">
@@ -519,6 +574,7 @@
               </div>
               <button class="btn" id="sp-import">Импортировать Spotify</button>
               <div class="card-status" id="sp-status"></div>
+              <div class="saved-note" id="sp-saved"></div>
             </div>
           </div>
 
@@ -622,7 +678,8 @@
     return many;
   }
 
-  var SOURCE_NAMES = { local: "ЛОКАЛЬНО", vk: "VK", yandex: "ЯНДЕКС", spotify: "SPOTIFY" };
+  var SOURCE_NAMES = { local: "ЛОКАЛЬНО", vk: "VK", yandex: "ЯНДЕКС", spotify: "SPOTIFY", link: "ССЫЛКА" };
+  var PROVIDER_NAMES = { spotify: "SPOTIFY", yandex: "ЯНДЕКС", link: "ССЫЛКА" };
 
   function toast(msg, isErr) {
     var box = $("toasts");
@@ -686,8 +743,8 @@
   }
 
   function loadLibrary() {
-    if (!ipc) return;
-    ipc.invoke("load-library")
+    if (!ipc) return Promise.resolve();
+    return ipc.invoke("load-library")
       .then(function (data) {
         if (!data) return;
         var known = {};
@@ -798,8 +855,11 @@
       main.appendChild(text);
 
       var src = document.createElement("span");
-      src.className = "r-source src-" + t.source;
-      src.textContent = SOURCE_NAMES[t.source] || t.source;
+      var sourceKey = t.source === "link" ? (t.provider || "link") : t.source;
+      src.className = "r-source src-" + sourceKey;
+      src.textContent = t.source === "link"
+        ? (PROVIDER_NAMES[t.provider] || "ССЫЛКА")
+        : (SOURCE_NAMES[t.source] || t.source);
 
       var dur = document.createElement("div");
       dur.className = "r-dur";
@@ -962,10 +1022,10 @@
       return;
     }
 
-    if (t.source === "yandex" && t.externalId && ipc) {
+    if ((t.source === "yandex" || (t.source === "link" && t.provider === "yandex")) && t.externalId && ipc) {
       $("np-artist").textContent = t.artist + " · получаем ссылку…";
       toast("Получаем ссылку Яндекс Музыки…");
-      ipc.invoke("resolve-track-url", { id: t.externalId })
+      ipc.invoke("resolve-track-url", { id: t.externalId, public: t.public === true })
         .then(function (result) {
           if (request !== playRequest || tracks[current] !== t) return;
           if (!result || !result.url) throw new Error("Ссылка не найдена");
@@ -982,7 +1042,7 @@
       return;
     }
 
-    if (t.source === "spotify") {
+    if (t.source === "spotify" || (t.source === "link" && t.provider === "spotify")) {
       toast("Spotify не отдал ссылку на этот трек: доступны только 30-секундные превью.", true);
     } else if (t.source === "vk") {
       toast("VK не отдал ссылку на трек. Импортируйте музыку заново.", true);
@@ -1112,49 +1172,143 @@
     return parts.join(" · ");
   }
 
+  function applyImportedResult(service, result) {
+    var currentId = tracks[current] ? tracks[current].id : null;
+    var playingService = tracks[current] && tracks[current].source === service;
+
+    if (playingService) {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+    }
+
+    tracks = tracks.filter(function (t) { return t.source !== service; });
+    collections = collections.filter(function (c) { return c.source !== service; });
+
+    (result.tracks || []).forEach(function (t) {
+      t.source = service;
+      t.src = t.url || null;
+      tracks.push(t);
+    });
+    (result.collections || []).forEach(function (c) {
+      collections.push(c);
+    });
+
+    if (playingService) current = -1;
+    else if (currentId) {
+      current = -1;
+      for (var i = 0; i < tracks.length; i++) {
+        if (tracks[i].id === currentId) { current = i; break; }
+      }
+    }
+
+    activeCollectionId = null;
+    visibleLimit = 300;
+    renderAll();
+  }
+
+  var savedServices = [];
+  var syncing = false;
+  var syncStarted = false;
+  var SERVICE_LABELS = { vk: "VK", yandex: "Яндекс", spotify: "Spotify" };
+
+  function refreshSaved() {
+    if (!ipc) return Promise.resolve([]);
+    return ipc.invoke("get-saved-services")
+      .then(function (data) {
+        savedServices = (data && data.services) || [];
+        ["vk", "yandex", "spotify"].forEach(function (service) {
+          var note = $(service + "-saved");
+          var input = $(service === "yandex" ? "ya-token" : service === "spotify" ? "sp-token" : "vk-token");
+          var saved = savedServices.indexOf(service) !== -1;
+          if (note) {
+            note.textContent = saved ? "🔒 Токен сохранён — автозагрузка включена" : "";
+            note.className = "saved-note" + (saved ? "" : " empty");
+          }
+          if (input) {
+            input.placeholder = saved
+              ? "Токен сохранён — можно оставить пустым"
+              : (service === "vk" ? "access_token" : service === "yandex" ? "OAuth token" : "Bearer token");
+          }
+        });
+        $("sync-saved").style.display = savedServices.length ? "inline-block" : "none";
+        $("saved-summary").textContent = savedServices.length
+          ? savedServices.map(function (s) { return SERVICE_LABELS[s] || s; }).join(" · ") + " сохранены"
+          : (data && data.encryptionAvailable === false
+            ? "Шифрование недоступно — токены не сохраняются"
+            : "Токены не сохранены");
+        return savedServices;
+      })
+      .catch(function () { return []; });
+  }
+
+  function syncSaved(manual) {
+    if (!ipc || syncing) return Promise.resolve();
+    if (!savedServices.length) {
+      if (manual) toast("Сначала импортируйте музыку и включите запоминание токенов.", true);
+      return Promise.resolve();
+    }
+
+    syncing = true;
+    var button = $("sync-saved");
+    button.disabled = true;
+    button.textContent = "Обновляем…";
+    savedServices.forEach(function (service) {
+      importStatus[service] = service + "-status";
+      setStatus(service + "-status", '<span class="spin"></span> Автообновление…');
+    });
+    if (!manual) toast("Обновляем сохранённые библиотеки…");
+
+    return ipc.invoke("sync-saved")
+      .then(function (data) {
+        var results = (data && data.results) || {};
+        var errors = (data && data.errors) || {};
+        var updated = 0;
+
+        Object.keys(results).forEach(function (service) {
+          applyImportedResult(service, results[service]);
+          var stats = results[service].stats || { tracks: 0 };
+          setStatus(service + "-status", "Обновлено: " + statsText(stats), "ok");
+          updated++;
+        });
+        Object.keys(errors).forEach(function (service) {
+          setStatus(service + "-status", esc(errors[service]), "err");
+        });
+
+        if (updated) {
+          scheduleSave();
+          toast("Автообновление завершено: " + updated + " " + plural(updated, "сервис", "сервиса", "сервисов"));
+        } else if (manual && !Object.keys(errors).length) {
+          toast("Сохранённых токенов нет", true);
+        }
+      })
+      .catch(function (err) {
+        toast("Не удалось обновить библиотеку: " + (err && err.message ? err.message : err), true);
+      })
+      .then(function () {
+        savedServices.forEach(function (service) { delete importStatus[service]; });
+        syncing = false;
+        button.disabled = false;
+        button.textContent = "Обновить сохранённые";
+      });
+  }
+
   function importTracks(service, tokenId, statusId, button) {
     var token = ($(tokenId).value || "").trim();
-    if (!token) { setStatus(statusId, "Введите токен доступа", "err"); return; }
+    if (!token && savedServices.indexOf(service) === -1) {
+      setStatus(statusId, "Введите токен доступа", "err");
+      return;
+    }
     if (!ipc) { setStatus(statusId, "Импорт доступен только в приложении", "err"); return; }
 
+    var remember = $("remember-tokens").checked;
     button.disabled = true;
     importStatus[service] = statusId;
     setStatus(statusId, '<span class="spin"></span> Импортируем медиатеку…');
 
-    ipc.invoke("import-music", { service: service, token: token })
+    ipc.invoke("import-music", { service: service, token: token, remember: remember })
       .then(function (result) {
-        var currentId = tracks[current] ? tracks[current].id : null;
-        var playingService = tracks[current] && tracks[current].source === service;
-
-        if (playingService) {
-          audio.pause();
-          audio.removeAttribute("src");
-          audio.load();
-        }
-
-        tracks = tracks.filter(function (t) { return t.source !== service; });
-        collections = collections.filter(function (c) { return c.source !== service; });
-
-        (result.tracks || []).forEach(function (t) {
-          t.source = service;
-          t.src = t.url || null;
-          tracks.push(t);
-        });
-        (result.collections || []).forEach(function (c) {
-          collections.push(c);
-        });
-
-        if (playingService) current = -1;
-        else if (currentId) {
-          current = -1;
-          for (var i = 0; i < tracks.length; i++) {
-            if (tracks[i].id === currentId) { current = i; break; }
-          }
-        }
-
-        activeCollectionId = null;
-        visibleLimit = 300;
-        renderAll();
+        applyImportedResult(service, result);
         scheduleSave();
         $(tokenId).value = "";
 
@@ -1162,6 +1316,7 @@
         setStatus(statusId, statsText(stats), "ok");
         toast("Импорт завершён: " + statsText(stats));
         (result.warnings || []).slice(0, 2).forEach(function (warning) { toast(warning); });
+        refreshSaved();
       })
       .catch(function (err) {
         setStatus(statusId, esc(err && err.message ? err.message : err), "err");
@@ -1169,6 +1324,47 @@
       .then(function () {
         button.disabled = false;
         delete importStatus[service];
+      });
+  }
+
+  function importLink() {
+    var url = ($("link-url").value || "").trim();
+    if (!url) { setStatus("link-status", "Вставьте ссылку", "err"); return; }
+    if (!ipc) { setStatus("link-status", "Импорт доступен только в приложении", "err"); return; }
+
+    var button = $("link-import");
+    button.disabled = true;
+    importStatus.link = "link-status";
+    setStatus("link-status", '<span class="spin"></span> Читаем ссылку…');
+
+    ipc.invoke("import-link", { url: url })
+      .then(function (result) {
+        var ids = (result.collections || []).map(function (c) { return c.id; });
+        tracks = tracks.filter(function (t) {
+          return !(t.source === "link" && ids.indexOf(t.origin) !== -1);
+        });
+        collections = collections.filter(function (c) { return ids.indexOf(c.id) === -1; });
+
+        (result.tracks || []).forEach(function (t) {
+          t.src = t.url || null;
+          tracks.push(t);
+        });
+        (result.collections || []).forEach(function (c) { collections.push(c); });
+
+        renderAll();
+        scheduleSave();
+        $("link-url").value = "";
+        var stats = result.stats || { tracks: (result.tracks || []).length };
+        setStatus("link-status", statsText(stats), "ok");
+        toast("По ссылке добавлено: " + stats.tracks + " " + plural(stats.tracks, "трек", "трека", "треков"));
+        (result.warnings || []).slice(0, 2).forEach(function (warning) { toast(warning); });
+      })
+      .catch(function (err) {
+        setStatus("link-status", esc(err && err.message ? err.message : err), "err");
+      })
+      .then(function () {
+        button.disabled = false;
+        delete importStatus.link;
       });
   }
 
@@ -1192,6 +1388,8 @@
   $("sp-import").addEventListener("click", function () {
     importTracks("spotify", "sp-token", "sp-status", this);
   });
+  $("link-import").addEventListener("click", importLink);
+  $("sync-saved").addEventListener("click", function () { syncSaved(true); });
 
   document.querySelectorAll(".eye").forEach(function (b) {
     b.addEventListener("click", function () {
@@ -1298,7 +1496,14 @@
 
   // ---------- Boot ----------
   renderAll();
-  loadLibrary();
+  loadLibrary()
+    .then(refreshSaved)
+    .then(function (services) {
+      if (services && services.length && !syncStarted) {
+        syncStarted = true;
+        syncSaved(false);
+      }
+    });
 })();
 </script>
 </body>

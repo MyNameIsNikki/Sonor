@@ -8,27 +8,42 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Alert
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
+import * as SecureStore from 'expo-secure-store';
 import MusicImporter from './src/components/MusicImporter';
 import PlayerControls from './src/components/PlayerControls';
 import TrackList from './src/components/TrackList';
 import CollectionGrid from './src/components/CollectionGrid';
-import { resolveYandexStream } from './src/services/musicImport';
+import { importMusic, resolveYandexStream } from './src/services/musicImport';
 
 const LIBRARY_FILE = FileSystem.documentDirectory
   ? `${FileSystem.documentDirectory}sonor-library.json`
   : null;
 
+const TOKEN_KEYS = {
+  vk: 'sonor_token_vk',
+  yandex: 'sonor_token_yandex',
+  spotify: 'sonor_token_spotify'
+};
+
+const SERVICE_NAMES = {
+  vk: 'VK Музыка',
+  yandex: 'Яндекс Музыка',
+  spotify: 'Spotify'
+};
+
 const SOURCE_LABELS = {
   local: 'ЛОКАЛЬНО',
   vk: 'VK',
   yandex: 'ЯНДЕКС',
-  spotify: 'SPOTIFY'
+  spotify: 'SPOTIFY',
+  link: 'ССЫЛКА'
 };
 
 const TABS = [
@@ -51,6 +66,9 @@ export default function App() {
   const [resolvingTrackId, setResolvingTrackId] = useState(null);
   const [libraryReady, setLibraryReady] = useState(false);
   const [visibleLimit, setVisibleLimit] = useState(300);
+  const [savedServices, setSavedServices] = useState([]);
+  const [secureStoreAvailable, setSecureStoreAvailable] = useState(true);
+  const [autoSyncStatus, setAutoSyncStatus] = useState('');
 
   const tokensRef = useRef({});
   const nextTrackRef = useRef(null);
@@ -67,7 +85,12 @@ export default function App() {
         .map((track) => ({ ...track, src: track.url || null }));
       setTracks([...localTracks, ...imported]);
       setCollections(saved.collections);
+      const remembered = await loadRememberedTokens();
+      if (!alive) return;
       setLibraryReady(true);
+      if (Object.keys(remembered).length) {
+        syncRemembered(remembered, true);
+      }
     })();
     return () => {
       alive = false;
@@ -94,7 +117,10 @@ export default function App() {
           duration: track.duration || 0,
           url: track.url || null,
           image: track.image || null,
-          source: track.source
+          source: track.source,
+          provider: track.provider || null,
+          origin: track.origin || null,
+          public: !!track.public
         }));
       const payload = JSON.stringify({
         version: 2,
@@ -195,13 +221,135 @@ export default function App() {
     }
   };
 
+  const loadRememberedTokens = async () => {
+    let available = true;
+    try {
+      available = await SecureStore.isAvailableAsync();
+    } catch (error) {
+      available = false;
+    }
+    if (!available) {
+      setSecureStoreAvailable(false);
+      return {};
+    }
+    const remembered = {};
+    for (const service of Object.keys(TOKEN_KEYS)) {
+      try {
+        const value = await SecureStore.getItemAsync(TOKEN_KEYS[service]);
+        if (value) remembered[service] = value;
+      } catch (error) {
+        console.log('Не удалось прочитать токен:', service, error.message);
+      }
+    }
+    setSavedServices(Object.keys(remembered));
+    tokensRef.current = { ...tokensRef.current, ...remembered };
+    return remembered;
+  };
+
+  const rememberToken = async (service, token, remember) => {
+    if (!token) return false;
+    if (!remember || !secureStoreAvailable) {
+      try {
+        await SecureStore.deleteItemAsync(TOKEN_KEYS[service]);
+      } catch (error) {
+        console.log('Не удалось удалить токен:', error.message);
+      }
+      setSavedServices((previous) => previous.filter((item) => item !== service));
+      return false;
+    }
+    try {
+      await SecureStore.setItemAsync(TOKEN_KEYS[service], token);
+      setSavedServices((previous) =>
+        previous.indexOf(service) === -1 ? [...previous, service] : previous
+      );
+      return true;
+    } catch (error) {
+      console.log('Не удалось сохранить токен:', error.message);
+      setSecureStoreAvailable(false);
+      return false;
+    }
+  };
+
+  const mergeImportedResult = (service, result) => {
+    const imported = (result.tracks || []).map((track) => ({
+      ...track,
+      duration: Math.round((track.duration || 0) * 1000),
+      src: track.url || null
+    }));
+    setTracks((previous) => [
+      ...previous.filter((track) => track.source !== service),
+      ...imported
+    ]);
+    setCollections((previous) => [
+      ...previous.filter((collection) => collection.source !== service),
+      ...(result.collections || [])
+    ]);
+    return imported;
+  };
+
+  const syncRemembered = async (remembered, silent = false) => {
+    const services = Object.keys(remembered);
+    if (!services.length) return;
+    setAutoSyncStatus('Обновляем сохранённую музыку…');
+    let updated = 0;
+    const errors = [];
+    for (const service of services) {
+      try {
+        const result = await importMusic(service, remembered[service], (update) => {
+          if (update && update.message) {
+            setAutoSyncStatus(`${SERVICE_NAMES[service] || service}: ${update.message}`);
+          }
+        });
+        if (result && result.tracks && result.tracks.length) {
+          mergeImportedResult(service, result);
+          updated += result.tracks.length;
+        }
+      } catch (error) {
+        errors.push(`${SERVICE_NAMES[service] || service}: ${error.message}`);
+      }
+    }
+    setAutoSyncStatus('');
+    if (silent) {
+      if (errors.length) console.log('Автосинхронизация:', errors.join('; '));
+      return;
+    }
+    if (updated) {
+      Alert.alert(
+        'Библиотека обновлена',
+        `Обновлено треков: ${updated}${errors.length ? `\n\n${errors.slice(0, 3).join('\n')}` : ''}`
+      );
+    } else {
+      Alert.alert(
+        'Не удалось обновить',
+        errors.slice(0, 3).join('\n') || 'Проверьте токены и подключение к интернету.'
+      );
+    }
+  };
+
+  const getToken = (service) => tokensRef.current[service] || '';
+
+  const syncSavedManually = () => {
+    const remembered = {};
+    savedServices.forEach((service) => {
+      if (tokensRef.current[service]) remembered[service] = tokensRef.current[service];
+    });
+    if (!Object.keys(remembered).length) {
+      Alert.alert(
+        'Нет сохранённых токенов',
+        'Импортируйте музыку с включённой галочкой «Запоминать токены».'
+      );
+      return;
+    }
+    syncRemembered(remembered, false);
+  };
+
   const startPlayback = async (track, uri) => {
     if (!uri) {
       Alert.alert(
         'Нет ссылки',
-        track.source === 'spotify'
+        track.source === 'spotify' || (track.source === 'link' && track.provider === 'spotify')
           ? 'Spotify отдаёт только 30-секундные превью, и для этого трека оно недоступно.'
-          : 'У этого трека нет прямой ссылки. Импортируйте медиатеку заново — ссылки сервисов со временем истекают.'
+          : 'У этого трека нет прямой ссылки. Импортируйте медиатеку или добавьте ссылку заново — ссылки сервисов со временем истекают.'
       );
       return;
     }
@@ -230,9 +378,11 @@ export default function App() {
     let playable = track;
     let uri = track.uri || track.url;
 
-    if (!uri && track.source === 'yandex') {
-      const token = tokensRef.current.yandex;
-      if (!token) {
+    const isYandex =
+      track.source === 'yandex' || (track.source === 'link' && track.provider === 'yandex');
+    if (!uri && isYandex) {
+      const token = tokensRef.current.yandex || null;
+      if (!token && !track.public) {
         Alert.alert(
           'Нужен токен Яндекса',
           'Ссылки Яндекс Музыки не сохраняются между запусками. Откройте «Импорт музыки», вставьте токен и импортируйте медиатеку заново.'
@@ -241,10 +391,18 @@ export default function App() {
       }
       setResolvingTrackId(track.id);
       try {
-        const directUrl = await resolveYandexStream(
-          track.externalId || String(track.id).replace(/^yandex_/, ''),
-          token
-        );
+        const externalId =
+          track.externalId ||
+          String(track.id)
+            .replace(/^link_/, '')
+            .replace(/^yandex_/, '');
+        let directUrl;
+        try {
+          directUrl = await resolveYandexStream(externalId, token);
+        } catch (error) {
+          if (!track.public) throw error;
+          directUrl = await resolveYandexStream(externalId, null);
+        }
         playable = { ...track, url: directUrl, src: directUrl };
         setTracks((previous) =>
           previous.map((item) => (item.id === track.id ? { ...item, url: directUrl, src: directUrl } : item))
@@ -292,18 +450,54 @@ export default function App() {
     }
   };
 
-  const handleImportComplete = (result, service, token) => {
-    tokensRef.current[service] = token;
-    const imported = result.tracks.map((track) => ({
+  const handleImportComplete = async (result, service, token, remember = true) => {
+    const effectiveToken = (token || '').trim() || tokensRef.current[service] || '';
+    if (effectiveToken) tokensRef.current[service] = effectiveToken;
+    const imported = mergeImportedResult(service, result);
+
+    setActiveCollectionId(null);
+    setActiveTab('all');
+    setVisibleLimit(300);
+    setShowImport(false);
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+
+    const tokenSaved =
+      effectiveToken && remember
+        ? await rememberToken(service, effectiveToken, remember)
+        : false;
+
+    const stats = result.stats || {};
+    let message = `Треков: ${stats.tracks || imported.length}`;
+    if (stats.playlists) message += `\nПлейлистов: ${stats.playlists}`;
+    if (stats.albums) message += `\nАльбомов: ${stats.albums}`;
+    if (stats.liked) message += `\nЛюбимых треков: ${stats.liked}`;
+    if (effectiveToken && remember && !tokenSaved) {
+      message += '\n\nТокен не сохранён: безопасное хранилище недоступно.';
+    }
+    if (result.warnings && result.warnings.length) {
+      message += `\n\n${result.warnings.slice(0, 3).join('\n')}`;
+    }
+    Alert.alert('Импорт завершён', message);
+  };
+
+  const handleLinkComplete = (result) => {
+    const linkCollections = result.collections || [];
+    const collectionIds = new Set(linkCollections.map((collection) => collection.id));
+    const imported = (result.tracks || []).map((track) => ({
       ...track,
       duration: Math.round((track.duration || 0) * 1000),
       src: track.url || null
     }));
 
-    setTracks((previous) => [...previous.filter((track) => track.source !== service), ...imported]);
+    setTracks((previous) => [
+      ...previous.filter(
+        (track) => !(track.source === 'link' && track.origin && collectionIds.has(track.origin))
+      ),
+      ...imported
+    ]);
     setCollections((previous) => [
-      ...previous.filter((collection) => collection.source !== service),
-      ...(result.collections || [])
+      ...previous.filter((collection) => !collectionIds.has(collection.id)),
+      ...linkCollections
     ]);
     setActiveCollectionId(null);
     setActiveTab('all');
@@ -311,15 +505,12 @@ export default function App() {
     setShowImport(false);
     scrollRef.current?.scrollTo({ y: 0, animated: true });
 
-    const stats = result.stats || {};
-    let message = `Треков: ${stats.tracks || imported.length}`;
-    if (stats.playlists) message += `\nПлейлистов: ${stats.playlists}`;
-    if (stats.albums) message += `\nАльбомов: ${stats.albums}`;
-    if (stats.liked) message += `\nЛюбимых треков: ${stats.liked}`;
+    let message = `Добавлено треков: ${imported.length}`;
+    if (linkCollections.length) message += `\nКоллекций: ${linkCollections.length}`;
     if (result.warnings && result.warnings.length) {
       message += `\n\n${result.warnings.slice(0, 3).join('\n')}`;
     }
-    Alert.alert('Импорт завершён', message);
+    Alert.alert('Ссылка добавлена', message);
   };
 
   const openCollection = (collection) => {
@@ -466,7 +657,32 @@ export default function App() {
             </LinearGradient>
           </TouchableOpacity>
 
-          {showImport && <MusicImporter onImportComplete={handleImportComplete} />}
+          {autoSyncStatus ? (
+            <View style={styles.syncStatus}>
+              <ActivityIndicator color="#00d4ff" size="small" />
+              <Text style={styles.syncHint}>{autoSyncStatus}</Text>
+            </View>
+          ) : savedServices.length > 0 ? (
+            <TouchableOpacity
+              style={styles.syncButton}
+              onPress={syncSavedManually}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.syncButtonText}>
+                ♻ Обновить сохранённую музыку ({savedServices.length})
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {showImport && (
+            <MusicImporter
+              onImportComplete={handleImportComplete}
+              onLinkComplete={handleLinkComplete}
+              savedServices={savedServices}
+              encryptionAvailable={secureStoreAvailable}
+              getToken={getToken}
+            />
+          )}
 
           <View style={styles.tabs}>
             {TABS.map((tab) => {
@@ -585,6 +801,35 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: 'bold'
+  },
+  syncStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: -6,
+    marginBottom: 14,
+    paddingHorizontal: 4
+  },
+  syncHint: {
+    flex: 1,
+    fontSize: 11.5,
+    color: '#8fd8f0'
+  },
+  syncButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginTop: -6,
+    marginBottom: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 212, 255, 0.3)',
+    backgroundColor: 'rgba(0, 212, 255, 0.07)'
+  },
+  syncButtonText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#8fd8f0'
   },
   tabs: {
     flexDirection: 'row',

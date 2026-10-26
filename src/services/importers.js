@@ -428,6 +428,7 @@ async function importVKFull(token, builder) {
 const YANDEX_API = 'https://api.music.yandex.net';
 
 function yandexHeaders(token) {
+  if (!token) return {};
   return { Authorization: 'OAuth ' + token };
 }
 
@@ -839,6 +840,347 @@ async function importSpotifyFull(token, builder) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Public links (no account token)                                     */
+/* ------------------------------------------------------------------ */
+
+const AUDIO_EXT = /\.(mp3|m4a|aac|ogg|oga|opus|wav|flac|webm)(?:$|\?)/i;
+
+function splitArtistTitle(value) {
+  const s = text(value, '');
+  const parts = s.split(/\s+-\s+/);
+  if (parts.length >= 2) {
+    return { artist: parts[0].trim(), title: parts.slice(1).join(' - ').trim() };
+  }
+  return { artist: 'Неизвестный исполнитель', title: s };
+}
+
+function nameFromUrl(value) {
+  try {
+    const parsed = new URL(value);
+    let name = parsed.pathname.split('/').filter(Boolean).pop() || parsed.hostname;
+    name = decodeURIComponent(name).replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[_+]+/g, ' ');
+    return splitArtistTitle(name);
+  } catch (err) {
+    return { artist: 'Неизвестный исполнитель', title: 'Аудиопоток' };
+  }
+}
+
+function resolveUrl(value, base) {
+  try {
+    return new URL(value, base).toString();
+  } catch (err) {
+    return null;
+  }
+}
+
+function addLinkTrack(builder, data, collectionId) {
+  if (!data || (!data.url && !data.title)) return null;
+  const mapped = builder.addTrack({
+    id: data.id || ('link_' + crypto.createHash('sha1').update(data.url).digest('hex').slice(0, 16)),
+    externalId: data.externalId || null,
+    title: text(data.title, 'Без названия'),
+    artist: text(data.artist, 'Неизвестный исполнитель'),
+    album: text(data.album, ''),
+    duration: Number(data.duration) || 0,
+    url: data.url,
+    image: data.image || null,
+    source: 'link',
+    provider: data.provider || 'link',
+    public: data.public === true,
+    origin: collectionId
+  });
+  return mapped;
+}
+
+function parseM3U(raw, baseUrl, builder) {
+  const lines = raw.replace(/^\uFEFF/, '').split(/\r?\n/);
+  let pending = null;
+  const entries = [];
+
+  lines.forEach(function (line) {
+    const value = line.trim();
+    if (!value || value.indexOf('#EXTM3U') === 0) return;
+    if (value.indexOf('#EXTINF:') === 0) {
+      const comma = value.indexOf(',');
+      const meta = comma === -1 ? '' : value.slice(comma + 1);
+      pending = { meta: meta };
+      return;
+    }
+    if (value.charAt(0) === '#') return;
+    const url = resolveUrl(value, baseUrl);
+    if (!url) return;
+    entries.push({ url: url, meta: pending ? pending.meta : '' });
+    pending = null;
+  });
+
+  return entries;
+}
+
+function parsePLS(raw, baseUrl) {
+  const lines = raw.replace(/^\uFEFF/, '').split(/\r?\n/);
+  const files = {};
+  const titles = {};
+  lines.forEach(function (line) {
+    let match = line.match(/^\s*File(\d+)\s*=\s*(.+)$/i);
+    if (match) files[match[1]] = resolveUrl(match[2].trim(), baseUrl);
+    match = line.match(/^\s*Title(\d+)\s*=\s*(.+)$/i);
+    if (match) titles[match[1]] = match[2].trim();
+  });
+  return Object.keys(files)
+    .filter(function (key) { return !!files[key]; })
+    .map(function (key) { return { url: files[key], meta: titles[key] || '' }; });
+}
+
+function parseXSPF(raw, baseUrl) {
+  const entries = [];
+  const blocks = raw.match(/<track\b[\s\S]*?<\/track>/gi) || [];
+  blocks.forEach(function (block) {
+    const location = block.match(/<location[^>]*>([\s\S]*?)<\/location>/i);
+    if (!location) return;
+    const title = block.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const creator = block.match(/<creator[^>]*>([\s\S]*?)<\/creator>/i);
+    const decoded = location[1]
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .trim();
+    const url = resolveUrl(decoded, baseUrl);
+    if (!url) return;
+    const meta = [creator ? creator[1] : '', title ? title[1] : ''].filter(Boolean).join(' - ');
+    entries.push({ url: url, meta: meta });
+  });
+  return entries;
+}
+
+async function importSpotifyPublicLink(link, builder) {
+  const match = link.match(/open\.spotify\.com\/(?:intl-[^/]+\/)?(playlist|album|track)\/([A-Za-z0-9]+)/);
+  if (!match) throw new Error('Не удалось распознать ссылку Spotify');
+
+  builder.progress('link', 'Читаем публичную страницу Spotify…');
+  const kind = match[1];
+  const id = match[2];
+  const html = await requestRaw('https://open.spotify.com/embed/' + kind + '/' + id, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36' }
+  });
+
+  const script = html.match(/<script[^>]+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+  if (!script) throw new Error('Spotify не вернул данные публичной страницы');
+
+  let entity;
+  try {
+    const data = JSON.parse(script[1]);
+    entity = data && data.props && data.props.pageProps && data.props.pageProps.state &&
+      data.props.pageProps.state.data && data.props.pageProps.state.data.entity;
+  } catch (err) {
+    throw new Error('Не удалось разобрать ответ Spotify');
+  }
+  if (!entity) throw new Error('Публичная страница Spotify пуста или недоступна');
+
+  const list = Array.isArray(entity.trackList) && entity.trackList.length
+    ? entity.trackList
+    : [entity];
+  const cover = entity.coverArt && entity.coverArt.sources && entity.coverArt.sources[0]
+    ? entity.coverArt.sources[0].url
+    : null;
+  const collectionId = 'link_spotify_' + (entity.id || id);
+  const trackIds = [];
+  let withoutPreview = 0;
+
+  list.forEach(function (item) {
+    if (!item) return;
+    const uri = item.uri || '';
+    const trackId = uri.indexOf('spotify:track:') === 0
+      ? uri.slice('spotify:track:'.length)
+      : (item.uid || crypto.createHash('sha1').update(JSON.stringify(item)).digest('hex').slice(0, 16));
+    const preview = item.audioPreview && item.audioPreview.url ? item.audioPreview.url : null;
+    if (!preview) withoutPreview++;
+    const added = addLinkTrack(builder, {
+      id: 'link_spotify_' + trackId,
+      externalId: trackId,
+      title: item.title,
+      artist: item.subtitle,
+      album: entity.name || '',
+      duration: item.duration ? Math.round(item.duration / 1000) : 0,
+      url: preview,
+      image: cover,
+      provider: 'spotify'
+    }, collectionId);
+    if (added) trackIds.push(added.id);
+  });
+
+  if (!trackIds.length) throw new Error('В этой ссылке Spotify нет треков');
+  if (withoutPreview) {
+    builder.warn('Spotify: для ' + withoutPreview + ' треков нет 30-секундного превью.');
+  }
+  builder.addCollection({
+    id: collectionId,
+    type: kind === 'album' ? 'album' : 'playlist',
+    title: text(entity.name || entity.title, 'Spotify'),
+    subtitle: text(entity.subtitle || entity.owner || 'Публичная ссылка Spotify', ''),
+    image: cover,
+    trackIds: trackIds
+  });
+  return builder.finish(null);
+}
+
+async function importYandexPublicLink(link, builder) {
+  builder.progress('link', 'Читаем публичную страницу Яндекс Музыки…');
+  let result;
+  let collectionType = 'playlist';
+  let collectionId;
+  let title;
+  let subtitle;
+  let image;
+
+  const playlistMatch = link.match(/music\.yandex\.[a-z]+\/users\/([^/?#]+)\/playlists\/([0-9]+)/i);
+  const albumMatch = link.match(/music\.yandex\.[a-z]+\/album\/([0-9]+)/i);
+  const uuidMatch = link.match(/music\.yandex\.[a-z]+\/playlists\/([0-9a-f-]{20,})/i);
+
+  if (playlistMatch) {
+    const login = decodeURIComponent(playlistMatch[1]);
+    const kind = playlistMatch[2];
+    result = await yandexGet('/users/' + encodeURIComponent(login) + '/playlists/' + kind, null);
+    collectionId = 'link_yandex_' + login + '_' + kind;
+    title = result.title;
+    subtitle = result.owner && (result.owner.name || result.owner.login);
+    image = yandexPlaylistImage(result);
+  } else if (uuidMatch) {
+    result = await yandexGet('/playlists/' + encodeURIComponent(uuidMatch[1]), null);
+    collectionId = 'link_yandex_' + uuidMatch[1];
+    title = result.title;
+    subtitle = result.owner && (result.owner.name || result.owner.login);
+    image = yandexPlaylistImage(result);
+  } else if (albumMatch) {
+    const albumId = albumMatch[1];
+    result = await yandexGet('/albums/' + encodeURIComponent(albumId) + '/with-tracks', null);
+    collectionType = 'album';
+    collectionId = 'link_yandex_album_' + albumId;
+    title = result.title;
+    subtitle = yandexArtists(result.artists);
+    image = yandexImage(result.coverUri);
+  } else {
+    throw new Error('Поддерживаются ссылки на плейлист или альбом Яндекс Музыки');
+  }
+
+  if (!result) throw new Error('Яндекс Музыка не вернул данные по ссылке');
+  const rawTracks = result.volumes
+    ? result.volumes.reduce(function (all, volume) { return all.concat(volume || []); }, [])
+    : yandexExtractTracks(result);
+  const trackIds = [];
+
+  rawTracks.forEach(function (entry) {
+    const track = entry && entry.track ? entry.track : entry;
+    const mapped = yandexMapTrack(track, title);
+    if (!mapped) return;
+    const added = addLinkTrack(builder, {
+      id: 'link_' + mapped.id,
+      externalId: mapped.externalId,
+      title: mapped.title,
+      artist: mapped.artist,
+      album: mapped.album,
+      duration: mapped.duration,
+      url: null,
+      image: mapped.image,
+      provider: 'yandex',
+      public: true
+    }, collectionId);
+    if (added) trackIds.push(added.id);
+  });
+
+  if (!trackIds.length) throw new Error('В этой ссылке Яндекс Музыки нет треков');
+  builder.addCollection({
+    id: collectionId,
+    type: collectionType,
+    title: text(title, 'Яндекс Музыка'),
+    subtitle: text(subtitle, 'Публичная ссылка'),
+    image: image,
+    trackIds: trackIds
+  });
+  return builder.finish(null);
+}
+
+async function importListLink(link, builder) {
+  builder.progress('link', 'Загружаем список треков…');
+  const raw = await requestRaw(link);
+  let entries = [];
+  let kind = 'playlist';
+  if (/^\s*#EXTM3U/i.test(raw) || /\.m3u8?(?:$|\?)/i.test(link)) entries = parseM3U(raw, link, builder);
+  else if (/^\s*\[playlist\]/i.test(raw) || /\.pls(?:$|\?)/i.test(link)) entries = parsePLS(raw, link);
+  else if (/<playlist\b/i.test(raw) || /\.xspf(?:$|\?)/i.test(link)) entries = parseXSPF(raw, link);
+  else throw new Error('Не удалось распознать формат списка (поддерживаются M3U, PLS и XSPF)');
+
+  const collectionId = 'link_list_' + crypto.createHash('sha1').update(link).digest('hex').slice(0, 16);
+  const trackIds = [];
+  entries.forEach(function (entry) {
+    const meta = splitArtistTitle(entry.meta);
+    const fallback = nameFromUrl(entry.url);
+    const added = addLinkTrack(builder, {
+      title: meta.title || fallback.title,
+      artist: meta.artist || fallback.artist,
+      album: '',
+      duration: 0,
+      url: entry.url,
+      provider: 'link'
+    }, collectionId);
+    if (added) trackIds.push(added.id);
+  });
+
+  if (!trackIds.length) throw new Error('В списке не найдено ни одного трека');
+  let title = 'Плейлист по ссылке';
+  try {
+    title = decodeURIComponent(new URL(link).pathname.split('/').filter(Boolean).pop() || title);
+  } catch (err) { /* keep default */ }
+  builder.addCollection({
+    id: collectionId,
+    type: kind,
+    title: title,
+    subtitle: 'Импортировано по ссылке',
+    image: null,
+    trackIds: trackIds
+  });
+  return builder.finish(null);
+}
+
+function importDirectAudio(link, builder) {
+  const meta = nameFromUrl(link);
+  const collectionId = 'link_audio_' + crypto.createHash('sha1').update(link).digest('hex').slice(0, 16);
+  const added = addLinkTrack(builder, {
+    title: meta.title,
+    artist: meta.artist,
+    album: '',
+    duration: 0,
+    url: link,
+    provider: 'link'
+  }, collectionId);
+  if (!added) throw new Error('Не удалось добавить аудиоссылку');
+  builder.addCollection({
+    id: collectionId,
+    type: 'playlist',
+    title: meta.title,
+    subtitle: 'Аудиоссылка',
+    image: null,
+    trackIds: [added.id]
+  });
+  return builder.finish(null);
+}
+
+async function importPublicLink(link, onProgress) {
+  const value = text(link, '');
+  if (!/^https?:\/\//i.test(value)) throw new Error('Вставьте ссылку, начинающуюся с http:// или https://');
+
+  const builder = createBuilder('link', onProgress);
+
+  if (/open\.spotify\.com\//i.test(value)) return importSpotifyPublicLink(value, builder);
+  if (/music\.yandex\.[a-z]+\//i.test(value)) return importYandexPublicLink(value, builder);
+  if (/vk\.com\/|vk\.ru\//i.test(value)) {
+    throw new Error('Публичные ссылки VK Музыки требуют токен. Используйте импорт VK с токеном.');
+  }
+  if (/\.(m3u8?|pls|xspf)(?:$|\?)/i.test(value)) return importListLink(value, builder);
+  if (AUDIO_EXT.test(value)) return importDirectAudio(value, builder);
+  throw new Error('Поддерживаются ссылки Spotify, Яндекс Музыки, M3U/PLS/XSPF и прямые аудиоссылки.');
+}
+
+/* ------------------------------------------------------------------ */
 /* Public API                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -854,6 +1196,7 @@ async function importService(service, token, onProgress) {
 
 module.exports = {
   importService: importService,
+  importPublicLink: importPublicLink,
   resolveYandexStream: resolveYandexStream,
   MAX_TRACKS: MAX_TRACKS
 };
