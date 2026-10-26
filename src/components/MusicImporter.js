@@ -225,8 +225,8 @@ const MusicImporter = ({
       {importingLink && <Text style={styles.linkProgress}>{progress || 'Импортируем…'}</Text>}
 
       <Text style={styles.footnote}>
-        Spotify отдаёт 30-секундные превью. Ссылки VK и Яндекс Музыки со временем истекают —
-        повторный импорт обновит их.
+        Spotify отдаёт 30-секундные превью и может быть недоступен в вашем регионе.
+        Ссылки VK и Яндекс Музыки со временем истекают — повторный импорт обновит их.
       </Text>
     </BlurView>
   );
