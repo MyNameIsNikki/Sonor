@@ -204,6 +204,15 @@
   }
   .row:hover .r-del { opacity: 1; }
   .r-del:hover { color: var(--danger); background: rgba(255, 107, 129, 0.12); }
+  .list-more {
+    padding: 18px; text-align: center; font-size: 12px; color: var(--muted);
+    border-top: 1px solid rgba(160, 212, 235, 0.07);
+  }
+  .list-more button {
+    border: 1px solid var(--stroke); border-radius: 999px; padding: 7px 16px;
+    background: var(--glass); color: var(--accent); font-size: 11.5px; cursor: pointer;
+  }
+  .list-more button:hover { background: var(--glass-strong); border-color: rgba(0, 212, 255, 0.4); }
 
   .empty {
     height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -212,6 +221,53 @@
   .empty .big { font-size: 46px; filter: drop-shadow(0 0 22px rgba(0, 212, 255, 0.35)); }
   .empty h3 { margin: 0; color: var(--text); font-size: 17px; }
   .empty p { margin: 0; font-size: 12.5px; max-width: 360px; line-height: 1.6; }
+
+  /* Playlists / albums */
+  .collection-grid {
+    flex: 1; min-height: 0; overflow-y: auto; align-content: start;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+    gap: 16px; padding: 2px 4px 12px 0;
+  }
+  .collection-grid::-webkit-scrollbar { width: 9px; }
+  .collection-grid::-webkit-scrollbar-thumb { background: rgba(0, 212, 255, 0.22); border-radius: 999px; }
+  .coll {
+    position: relative; overflow: hidden; cursor: pointer;
+    border: 1px solid var(--stroke); border-radius: 15px;
+    background: rgba(6, 20, 27, 0.55);
+    transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
+  }
+  .coll:hover {
+    transform: translateY(-3px); border-color: rgba(0, 212, 255, 0.4);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+  }
+  .coll-cover {
+    aspect-ratio: 1 / 1; display: grid; place-items: center;
+    background: linear-gradient(135deg, #123542, #1f5c74);
+    color: var(--accent); font-size: 42px; overflow: hidden;
+  }
+  .coll-cover img { width: 100%; height: 100%; object-fit: cover; }
+  .coll-body { padding: 11px 12px 13px; }
+  .coll-title {
+    font-size: 13px; font-weight: 600; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .coll-sub { margin-top: 4px; font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .coll-badge {
+    position: absolute; top: 9px; left: 9px; font-size: 9.5px;
+    letter-spacing: 0.5px; padding: 3px 8px; border-radius: 999px;
+    background: rgba(3, 14, 19, 0.72); backdrop-filter: blur(6px);
+  }
+  .coll-more {
+    grid-column: 1 / -1; padding: 38px 20px; text-align: center;
+    color: var(--muted); font-size: 12.5px; line-height: 1.7;
+  }
+  .coll-more b { color: var(--text); }
+  .filter-note {
+    font-size: 11px; color: var(--accent); background: rgba(0, 212, 255, 0.08);
+    border: 1px solid rgba(0, 212, 255, 0.22); border-radius: 999px;
+    padding: 5px 10px; max-width: 260px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
 
   /* Import view */
   .import-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
@@ -355,6 +411,14 @@
             <span class="ico">☰</span> Библиотека
             <span class="count" id="nav-count">0</span>
           </button>
+          <button class="nav-btn" data-view="playlists">
+            <span class="ico">≡</span> Плейлисты
+            <span class="count" id="playlists-count">0</span>
+          </button>
+          <button class="nav-btn" data-view="albums">
+            <span class="ico">◫</span> Альбомы
+            <span class="count" id="albums-count">0</span>
+          </button>
           <button class="nav-btn" data-view="import">
             <span class="ico">⇩</span> Импорт музыки
           </button>
@@ -370,8 +434,9 @@
       <main>
         <section class="view active" id="view-library">
           <div class="view-head">
+            <button class="btn" id="btn-back" style="display: none">← Назад</button>
             <div>
-              <h2>Библиотека</h2>
+              <h2 id="lib-title">Библиотека</h2>
               <p id="lib-sub">Ваша коллекция треков</p>
             </div>
             <div class="grow"></div>
@@ -385,8 +450,8 @@
           <div class="list-wrap" id="list-wrap">
             <div class="empty" id="empty-state">
               <div class="big">🎧</div>
-              <h3>Пока пусто</h3>
-              <p>Добавьте локальные аудиофайлы или импортируйте музыку из VK, Яндекс Музыки и Spotify.</p>
+              <h3 id="empty-title">Пока пусто</h3>
+              <p id="empty-text">Добавьте локальные аудиофайлы или импортируйте музыку из VK, Яндекс Музыки и Spotify.</p>
             </div>
             <div id="rows"></div>
           </div>
@@ -394,18 +459,38 @@
           <div class="dropzone" id="dropzone">Перетащите аудиофайлы сюда — MP3, FLAC, WAV, M4A, OGG</div>
         </section>
 
+        <section class="view" id="view-playlists">
+          <div class="view-head">
+            <div>
+              <h2>Плейлисты</h2>
+              <p>Плейлисты и любимые треки из подключённых сервисов</p>
+            </div>
+          </div>
+          <div class="collection-grid" id="playlists-grid"></div>
+        </section>
+
+        <section class="view" id="view-albums">
+          <div class="view-head">
+            <div>
+              <h2>Альбомы</h2>
+              <p>Сохранённые и любимые альбомы</p>
+            </div>
+          </div>
+          <div class="collection-grid" id="albums-grid"></div>
+        </section>
+
         <section class="view" id="view-import">
           <div class="view-head">
             <div>
               <h2>Импорт музыки</h2>
-              <p>Вставьте токен доступа — треки появятся в библиотеке</p>
+              <p>Импортируется вся медиатека: плейлисты, любимые треки и альбомы</p>
             </div>
           </div>
 
           <div class="import-grid">
             <div class="card vk">
               <h3>🅥 VK Музыка</h3>
-              <p class="sub">Токен доступа VK с правами на аудио (scope: audio).</p>
+              <p class="sub">Токен VK с доступом к аудио. Загрузим всю музыку и все плейлисты.</p>
               <div class="field">
                 <input type="password" id="vk-token" placeholder="access_token" />
                 <button class="eye" data-eye="vk-token">👁</button>
@@ -416,7 +501,7 @@
 
             <div class="card yandex">
               <h3>🅨 Яндекс Музыка</h3>
-              <p class="sub">OAuth-токен Яндекс Музыки для чтения плейлистов.</p>
+              <p class="sub">OAuth-токен Яндекс Музыки: плейлисты, «Мне нравится» и альбомы.</p>
               <div class="field">
                 <input type="password" id="ya-token" placeholder="OAuth token" />
                 <button class="eye" data-eye="ya-token">👁</button>
@@ -427,7 +512,7 @@
 
             <div class="card spotify">
               <h3>🅢 Spotify</h3>
-              <p class="sub">Access token Spotify (playlist-read-private, user-library-read).</p>
+              <p class="sub">Токен Spotify: плейлисты, любимые треки и сохранённые альбомы.</p>
               <div class="field">
                 <input type="password" id="sp-token" placeholder="Bearer token" />
                 <button class="eye" data-eye="sp-token">👁</button>
@@ -438,8 +523,9 @@
           </div>
 
           <div class="dropzone" style="margin-top: 18px">
-            Импортируются названия, исполнители и превью-ссылки. Для локального
-            воспроизведения добавьте файлы на вкладке «Библиотека».
+            Импортируются плейлисты, любимые треки и альбомы целиком. Ссылки на треки
+            VK и Яндекс Музыки обновляются при повторном импорте; Spotify отдаёт
+            только 30-секундные превью.
           </div>
         </section>
       </main>
@@ -499,13 +585,27 @@
 
   // ---------- State ----------
   var tracks = [];
+  var collections = [];
   var current = -1;
   var filtered = [];
+  var activeCollectionId = null;
+  var visibleLimit = 300;
+  var saveTimer = null;
+  var playRequest = 0;
+  var importStatus = {};
 
   var audio = document.getElementById("audio");
   audio.volume = 0.8;
 
   var $ = function (id) { return document.getElementById(id); };
+
+  function esc(value) {
+    return String(value === undefined || value === null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
 
   function fmt(sec) {
     if (!isFinite(sec) || sec < 0) sec = 0;
@@ -513,6 +613,16 @@
     var s = Math.floor(sec % 60);
     return m + ":" + (s < 10 ? "0" : "") + s;
   }
+
+  function plural(n, one, few, many) {
+    var mod10 = n % 10;
+    var mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return one;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
+    return many;
+  }
+
+  var SOURCE_NAMES = { local: "ЛОКАЛЬНО", vk: "VK", yandex: "ЯНДЕКС", spotify: "SPOTIFY" };
 
   function toast(msg, isErr) {
     var box = $("toasts");
@@ -525,10 +635,10 @@
       t.style.transform = "translateX(18px)";
       t.style.transition = "0.25s";
       setTimeout(function () { t.remove(); }, 300);
-    }, 3200);
+    }, isErr ? 5200 : 3200);
   }
 
-  // ---------- Library ----------
+  // ---------- Library helpers ----------
   function prettyName(name) {
     var base = name.replace(/\.[^.]+$/, "").replace(/_/g, " ").trim();
     var dash = base.split(/\s+-\s+/);
@@ -536,43 +646,124 @@
     return { artist: "Неизвестный исполнитель", title: base };
   }
 
-  function addFiles(fileList) {
-    var added = 0;
-    Array.prototype.forEach.call(fileList, function (file) {
-      if (!file.type || file.type.indexOf("audio") !== 0) return;
-      var meta = prettyName(file.name);
-      tracks.push({
-        id: "local_" + Date.now() + "_" + Math.random().toString(36).slice(2),
-        title: meta.title,
-        artist: meta.artist,
-        album: "",
-        src: URL.createObjectURL(file),
-        duration: 0,
-        source: "local"
-      });
-      added++;
-    });
-    if (!added) { toast("Аудиофайлы не найдены", true); return; }
-    render();
-    toast("Добавлено треков: " + added);
-    if (current === -1 && tracks.length) playAt(0);
+  function findCollection(id) {
+    for (var i = 0; i < collections.length; i++) {
+      if (collections[i].id === id) return collections[i];
+    }
+    return null;
   }
 
+  function collectionCount(collection) {
+    var byId = {};
+    tracks.forEach(function (t) { byId[t.id] = true; });
+    var count = 0;
+    collection.trackIds.forEach(function (id) { if (byId[id]) count++; });
+    return count;
+  }
+
+  function scheduleSave() {
+    if (!ipc) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(flushSave, 400);
+  }
+
+  function flushSave() {
+    if (!ipc) return;
+    clearTimeout(saveTimer);
+    var payloadTracks = tracks
+      .filter(function (t) { return t.source !== "local"; })
+      .map(function (t) {
+        var copy = {};
+        Object.keys(t).forEach(function (key) {
+          if (key !== "src") copy[key] = t[key];
+        });
+        return copy;
+      });
+    ipc.invoke("save-library", {
+      tracks: payloadTracks,
+      collections: collections
+    }).catch(function () { /* сохранение не должно мешать работе */ });
+  }
+
+  function loadLibrary() {
+    if (!ipc) return;
+    ipc.invoke("load-library")
+      .then(function (data) {
+        if (!data) return;
+        var known = {};
+        tracks.forEach(function (t) { known[t.id] = true; });
+        (data.tracks || []).forEach(function (t) {
+          if (!t || !t.id || known[t.id]) return;
+          t.src = t.url || null;
+          known[t.id] = true;
+          tracks.push(t);
+        });
+        collections = Array.isArray(data.collections) ? data.collections : [];
+        renderAll();
+        if (data.tracks && data.tracks.length) {
+          toast("Библиотека загружена: " + data.tracks.length + " " + plural(data.tracks.length, "трек", "трека", "треков"));
+        }
+      })
+      .catch(function () { /* пустая библиотека */ });
+  }
+
+  // ---------- Rendering ----------
   function render() {
+    var collection = activeCollectionId ? findCollection(activeCollectionId) : null;
+    if (activeCollectionId && !collection) activeCollectionId = null;
+
+    var base = tracks;
+    if (collection) {
+      var byId = {};
+      tracks.forEach(function (t) { byId[t.id] = t; });
+      var seen = {};
+      base = [];
+      collection.trackIds.forEach(function (id) {
+        if (byId[id] && !seen[id]) {
+          seen[id] = true;
+          base.push(byId[id]);
+        }
+      });
+    }
+
     var q = ($("search").value || "").toLowerCase().trim();
-    filtered = tracks.filter(function (t) {
-      return !q || (t.title + " " + t.artist).toLowerCase().indexOf(q) !== -1;
+    filtered = base.filter(function (t) {
+      return !q || (t.title + " " + t.artist + " " + (t.album || "")).toLowerCase().indexOf(q) !== -1;
     });
 
     var rows = $("rows");
     rows.innerHTML = "";
-    $("empty-state").style.display = filtered.length ? "none" : "flex";
     $("nav-count").textContent = tracks.length;
-    $("lib-sub").textContent = tracks.length
-      ? "Треков в коллекции: " + tracks.length
-      : "Ваша коллекция треков";
+    $("btn-back").style.display = collection ? "inline-flex" : "none";
 
-    filtered.forEach(function (t, i) {
+    if (collection) {
+      $("lib-title").textContent = collection.title;
+      $("lib-sub").textContent = filtered.length + " " +
+        plural(filtered.length, "трек", "трека", "треков") + " · " +
+        (SOURCE_NAMES[collection.source] || "ИМПОРТ");
+    } else {
+      $("lib-title").textContent = "Библиотека";
+      $("lib-sub").textContent = tracks.length
+        ? "Треков в коллекции: " + tracks.length
+        : "Ваша коллекция треков";
+    }
+
+    var emptyTitle = "Пока пусто";
+    var emptyText = "Добавьте локальные аудиофайлы или импортируйте музыку из VK, Яндекс Музыки и Spotify.";
+    if (q && !filtered.length) {
+      emptyTitle = "Ничего не найдено";
+      emptyText = "Попробуйте изменить запрос или открыть другую коллекцию.";
+    } else if (collection && !filtered.length) {
+      emptyTitle = "В коллекции пусто";
+      emptyText = "В этом плейлисте или альбоме пока нет доступных треков. Импортируйте музыку заново.";
+    }
+    $("empty-title").textContent = emptyTitle;
+    $("empty-text").textContent = emptyText;
+    $("empty-state").style.display = filtered.length ? "none" : "flex";
+
+    var shown = filtered.slice(0, visibleLimit);
+
+    shown.forEach(function (t, i) {
       var row = document.createElement("div");
       row.className = "row" + (t === tracks[current] ? " playing" : "");
 
@@ -587,10 +778,12 @@
       if (t.image) {
         var img = document.createElement("img");
         img.src = t.image;
+        img.loading = "lazy";
         cover.appendChild(img);
       } else {
         cover.textContent = "♪";
       }
+
       var text = document.createElement("div");
       text.className = "r-text";
       var titleEl = document.createElement("div");
@@ -606,7 +799,7 @@
 
       var src = document.createElement("span");
       src.className = "r-source src-" + t.source;
-      src.textContent = { local: "ЛОКАЛЬНО", vk: "VK", yandex: "ЯНДЕКС", spotify: "SPOTIFY" }[t.source] || t.source;
+      src.textContent = SOURCE_NAMES[t.source] || t.source;
 
       var dur = document.createElement("div");
       dur.className = "r-dur";
@@ -618,11 +811,7 @@
       del.title = "Удалить";
       del.addEventListener("click", function (ev) {
         ev.stopPropagation();
-        var idx = tracks.indexOf(t);
-        if (idx === current) { audio.pause(); current = -1; updateNowPlaying(); }
-        else if (idx < current) current--;
-        tracks.splice(idx, 1);
-        render();
+        removeTrack(t);
       });
 
       row.appendChild(num);
@@ -630,10 +819,105 @@
       row.appendChild(src);
       row.appendChild(dur);
       row.appendChild(del);
-      row.addEventListener("dblclick", function () { playTrack(t); });
       row.addEventListener("click", function () { playTrack(t); });
       rows.appendChild(row);
     });
+
+    if (filtered.length > shown.length) {
+      var more = document.createElement("div");
+      more.className = "list-more";
+      var btn = document.createElement("button");
+      btn.textContent = "Показать ещё " + Math.min(300, filtered.length - shown.length) +
+        " из " + (filtered.length - shown.length);
+      btn.addEventListener("click", function () {
+        visibleLimit += 300;
+        render();
+      });
+      more.appendChild(btn);
+      rows.appendChild(more);
+    }
+  }
+
+  function renderCollectionGroup(grid, items, kind) {
+    grid.innerHTML = "";
+    var byId = {};
+    tracks.forEach(function (t) { byId[t.id] = true; });
+
+    var visible = items.filter(function (collection) {
+      return collection.trackIds.some(function (id) { return byId[id]; });
+    });
+
+    if (!visible.length) {
+      var empty = document.createElement("div");
+      empty.className = "coll-more";
+      empty.innerHTML = kind === "album"
+        ? "<b>Альбомов пока нет</b><br>Импортируйте музыку — сохранённые и любимые альбомы появятся здесь."
+        : "<b>Плейлистов пока нет</b><br>Импортируйте музыку из VK, Яндекс Музыки или Spotify.";
+      grid.appendChild(empty);
+      return;
+    }
+
+    visible.forEach(function (collection) {
+      var count = collectionCount(collection);
+      var card = document.createElement("div");
+      card.className = "coll";
+      card.title = collection.title;
+
+      var cover = document.createElement("div");
+      cover.className = "coll-cover";
+      if (collection.image) {
+        var img = document.createElement("img");
+        img.src = collection.image;
+        img.loading = "lazy";
+        cover.appendChild(img);
+      } else {
+        cover.textContent = kind === "album" ? "💿" : "♫";
+      }
+
+      var badge = document.createElement("span");
+      badge.className = "coll-badge src-" + collection.source;
+      badge.textContent = collection.type === "liked"
+        ? "ЛЮБИМОЕ"
+        : collection.type === "library"
+          ? "МОЯ МУЗЫКА"
+          : (SOURCE_NAMES[collection.source] || "ИМПОРТ");
+      cover.appendChild(badge);
+
+      var body = document.createElement("div");
+      body.className = "coll-body";
+      var title = document.createElement("div");
+      title.className = "coll-title";
+      title.textContent = collection.title;
+      var sub = document.createElement("div");
+      sub.className = "coll-sub";
+      sub.textContent = count + " " + plural(count, "трек", "трека", "треков");
+      body.appendChild(title);
+      body.appendChild(sub);
+
+      card.appendChild(cover);
+      card.appendChild(body);
+      card.addEventListener("click", function () { openCollection(collection.id); });
+      grid.appendChild(card);
+    });
+  }
+
+  function renderCollections() {
+    var playlists = collections.filter(function (c) {
+      return c.type === "playlist" || c.type === "liked" || c.type === "library";
+    });
+    var albums = collections.filter(function (c) {
+      return c.type === "album";
+    });
+
+    $("playlists-count").textContent = playlists.length;
+    $("albums-count").textContent = albums.length;
+    renderCollectionGroup($("playlists-grid"), playlists, "playlist");
+    renderCollectionGroup($("albums-grid"), albums, "album");
+  }
+
+  function renderAll() {
+    render();
+    renderCollections();
   }
 
   function updateNowPlaying() {
@@ -655,50 +939,294 @@
     render();
   }
 
+  // ---------- Playback ----------
+  function playSource(src) {
+    audio.src = src;
+    var p = audio.play();
+    if (p && p.catch) {
+      p.catch(function () {
+        toast("Не удалось воспроизвести трек. Возможно, ссылка устарела — импортируйте музыку заново.", true);
+      });
+    }
+  }
+
   function playTrack(t) {
     current = tracks.indexOf(t);
     if (current < 0) return;
-    if (!t.src) {
-      toast("У трека нет ссылки для воспроизведения", true);
-      updateNowPlaying();
+
+    var request = ++playRequest;
+    updateNowPlaying();
+
+    if (t.src) {
+      playSource(t.src);
       return;
     }
-    audio.src = t.src;
-    var p = audio.play();
-    if (p && p.catch) p.catch(function () { toast("Не удалось воспроизвести трек", true); });
+
+    if (t.source === "yandex" && t.externalId && ipc) {
+      $("np-artist").textContent = t.artist + " · получаем ссылку…";
+      toast("Получаем ссылку Яндекс Музыки…");
+      ipc.invoke("resolve-track-url", { id: t.externalId })
+        .then(function (result) {
+          if (request !== playRequest || tracks[current] !== t) return;
+          if (!result || !result.url) throw new Error("Ссылка не найдена");
+          t.src = result.url;
+          t.url = result.url;
+          playSource(t.src);
+          updateNowPlaying();
+        })
+        .catch(function (err) {
+          if (request !== playRequest) return;
+          updateNowPlaying();
+          toast(String(err && err.message ? err.message : err), true);
+        });
+      return;
+    }
+
+    if (t.source === "spotify") {
+      toast("Spotify не отдал ссылку на этот трек: доступны только 30-секундные превью.", true);
+    } else if (t.source === "vk") {
+      toast("VK не отдал ссылку на трек. Импортируйте музыку заново.", true);
+    } else {
+      toast("У трека нет ссылки для воспроизведения", true);
+    }
     updateNowPlaying();
   }
 
-  function playAt(i) {
-    if (i < 0 || i >= tracks.length) return;
-    playTrack(tracks[i]);
+  function getQueue() {
+    if (activeCollectionId) return filtered;
+    if (($("search").value || "").trim()) return filtered;
+    return tracks;
   }
 
+  function step(direction) {
+    var queue = getQueue();
+    if (!queue.length) return;
+    var index = queue.indexOf(tracks[current]);
+    var next;
+    if (index < 0) next = direction > 0 ? 0 : queue.length - 1;
+    else next = (index + direction + queue.length) % queue.length;
+    playTrack(queue[next]);
+  }
+
+  function playAt(index) {
+    var queue = getQueue();
+    if (index < 0 || index >= queue.length) return;
+    playTrack(queue[index]);
+  }
+
+  function removeTrack(t) {
+    var index = tracks.indexOf(t);
+    if (index < 0) return;
+
+    if (index === current) {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+      current = -1;
+    } else if (index < current) {
+      current--;
+    }
+
+    tracks.splice(index, 1);
+    collections = collections.filter(function (collection) {
+      collection.trackIds = collection.trackIds.filter(function (id) { return id !== t.id; });
+      return collection.trackIds.length > 0;
+    });
+
+    renderAll();
+    scheduleSave();
+    if (current === -1) updateNowPlaying();
+  }
+
+  // ---------- Files ----------
+  function addFiles(fileList) {
+    var added = 0;
+    activeCollectionId = null;
+    $("search").value = "";
+    visibleLimit = 300;
+
+    Array.prototype.forEach.call(fileList, function (file) {
+      if (!file.type || file.type.indexOf("audio") !== 0) return;
+      var meta = prettyName(file.name);
+      tracks.push({
+        id: "local_" + Date.now() + "_" + Math.random().toString(36).slice(2),
+        title: meta.title,
+        artist: meta.artist,
+        album: "",
+        src: URL.createObjectURL(file),
+        duration: 0,
+        source: "local"
+      });
+      added++;
+    });
+
+    if (!added) { toast("Аудиофайлы не найдены", true); return; }
+    renderAll();
+    toast("Добавлено треков: " + added);
+    if (current === -1 && tracks.length) playTrack(tracks[0]);
+  }
+
+  // ---------- Views ----------
+  function showView(name) {
+    document.querySelectorAll(".nav-btn").forEach(function (b) {
+      b.classList.toggle("active", b.dataset.view === name);
+    });
+    document.querySelectorAll(".view").forEach(function (v) {
+      v.classList.toggle("active", v.id === "view-" + name);
+    });
+    if (name !== "library") activeCollectionId = null;
+    if (name === "playlists" || name === "albums") renderCollections();
+    if (name === "library") render();
+  }
+
+  function openCollection(id) {
+    activeCollectionId = id;
+    visibleLimit = 300;
+    $("search").value = "";
+    showView("library");
+  }
+
+  document.querySelectorAll(".nav-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () { showView(btn.dataset.view); });
+  });
+
+  $("btn-back").addEventListener("click", function () {
+    activeCollectionId = null;
+    $("search").value = "";
+    visibleLimit = 300;
+    renderAll();
+  });
+
+  // ---------- Import ----------
+  function setStatus(id, text, kind) {
+    var el = $(id);
+    el.className = "card-status" + (kind ? " " + kind : "");
+    el.innerHTML = text;
+  }
+
+  function statsText(stats) {
+    var parts = ["Треков: " + stats.tracks];
+    if (stats.playlists) parts.push("плейлистов: " + stats.playlists);
+    if (stats.liked) parts.push("любимых: " + stats.liked);
+    if (stats.albums) parts.push("альбомов: " + stats.albums);
+    return parts.join(" · ");
+  }
+
+  function importTracks(service, tokenId, statusId, button) {
+    var token = ($(tokenId).value || "").trim();
+    if (!token) { setStatus(statusId, "Введите токен доступа", "err"); return; }
+    if (!ipc) { setStatus(statusId, "Импорт доступен только в приложении", "err"); return; }
+
+    button.disabled = true;
+    importStatus[service] = statusId;
+    setStatus(statusId, '<span class="spin"></span> Импортируем медиатеку…');
+
+    ipc.invoke("import-music", { service: service, token: token })
+      .then(function (result) {
+        var currentId = tracks[current] ? tracks[current].id : null;
+        var playingService = tracks[current] && tracks[current].source === service;
+
+        if (playingService) {
+          audio.pause();
+          audio.removeAttribute("src");
+          audio.load();
+        }
+
+        tracks = tracks.filter(function (t) { return t.source !== service; });
+        collections = collections.filter(function (c) { return c.source !== service; });
+
+        (result.tracks || []).forEach(function (t) {
+          t.source = service;
+          t.src = t.url || null;
+          tracks.push(t);
+        });
+        (result.collections || []).forEach(function (c) {
+          collections.push(c);
+        });
+
+        if (playingService) current = -1;
+        else if (currentId) {
+          current = -1;
+          for (var i = 0; i < tracks.length; i++) {
+            if (tracks[i].id === currentId) { current = i; break; }
+          }
+        }
+
+        activeCollectionId = null;
+        visibleLimit = 300;
+        renderAll();
+        scheduleSave();
+        $(tokenId).value = "";
+
+        var stats = result.stats || { tracks: (result.tracks || []).length, playlists: 0, albums: 0, liked: 0 };
+        setStatus(statusId, statsText(stats), "ok");
+        toast("Импорт завершён: " + statsText(stats));
+        (result.warnings || []).slice(0, 2).forEach(function (warning) { toast(warning); });
+      })
+      .catch(function (err) {
+        setStatus(statusId, esc(err && err.message ? err.message : err), "err");
+      })
+      .then(function () {
+        button.disabled = false;
+        delete importStatus[service];
+      });
+  }
+
+  if (ipc) {
+    ipc.on("import-progress", function (event, progress) {
+      if (!progress || !progress.service) return;
+      var statusId = importStatus[progress.service];
+      if (!statusId) return;
+      var text = '<span class="spin"></span> ' + esc(progress.message || "Импортируем…");
+      if (progress.loaded) text += ' <span style="opacity:.7">(' + progress.loaded + ')</span>';
+      setStatus(statusId, text);
+    });
+  }
+
+  $("vk-import").addEventListener("click", function () {
+    importTracks("vk", "vk-token", "vk-status", this);
+  });
+  $("ya-import").addEventListener("click", function () {
+    importTracks("yandex", "ya-token", "ya-status", this);
+  });
+  $("sp-import").addEventListener("click", function () {
+    importTracks("spotify", "sp-token", "sp-status", this);
+  });
+
+  document.querySelectorAll(".eye").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var inp = $(b.dataset.eye);
+      inp.type = inp.type === "password" ? "text" : "password";
+    });
+  });
+
+  // ---------- Player events ----------
   $("btn-play").addEventListener("click", function () {
     if (!tracks.length) return;
     if (current === -1) { playAt(0); return; }
-    if (audio.paused) audio.play(); else audio.pause();
+    if (audio.paused) {
+      if (!audio.src) playTrack(tracks[current]);
+      else audio.play();
+    } else {
+      audio.pause();
+    }
     updateNowPlaying();
   });
-  $("btn-next").addEventListener("click", function () {
-    if (!tracks.length) return;
-    playAt((current + 1) % tracks.length);
-  });
+
+  $("btn-next").addEventListener("click", function () { step(1); });
   $("btn-prev").addEventListener("click", function () {
-    if (!tracks.length) return;
     if (audio.currentTime > 3) { audio.currentTime = 0; return; }
-    playAt((current - 1 + tracks.length) % tracks.length);
+    step(-1);
   });
 
   audio.addEventListener("play", function () { $("btn-play").textContent = "⏸"; });
   audio.addEventListener("pause", function () { $("btn-play").textContent = "▶"; });
-  audio.addEventListener("ended", function () {
-    if (tracks.length) playAt((current + 1) % tracks.length);
-  });
+  audio.addEventListener("ended", function () { step(1); });
   audio.addEventListener("loadedmetadata", function () {
     var t = tracks[current];
-    if (t) t.duration = audio.duration;
+    if (t && isFinite(audio.duration)) t.duration = audio.duration;
     $("t-dur").textContent = fmt(audio.duration);
+    render();
   });
   audio.addEventListener("timeupdate", function () {
     var d = audio.duration || 0;
@@ -708,6 +1236,10 @@
     seek.style.setProperty("--p", pct + "%");
     $("t-cur").textContent = fmt(audio.currentTime);
     $("t-dur").textContent = fmt(d);
+  });
+  audio.addEventListener("error", function () {
+    if (!audio.src) return;
+    toast("Не удалось открыть аудиопоток. Ссылка могла устареть — импортируйте музыку заново.", true);
   });
 
   $("seek").addEventListener("input", function () {
@@ -728,7 +1260,10 @@
     addFiles(this.files);
     this.value = "";
   });
-  $("search").addEventListener("input", render);
+  $("search").addEventListener("input", function () {
+    visibleLimit = 300;
+    render();
+  });
 
   // Drag & drop
   var dz = $("dropzone");
@@ -750,78 +1285,20 @@
     if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
   });
 
-  // ---------- Views ----------
-  document.querySelectorAll(".nav-btn").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      document.querySelectorAll(".nav-btn").forEach(function (b) { b.classList.remove("active"); });
-      btn.classList.add("active");
-      document.querySelectorAll(".view").forEach(function (v) { v.classList.remove("active"); });
-      $("view-" + btn.dataset.view).classList.add("active");
-    });
-  });
-
-  document.querySelectorAll(".eye").forEach(function (b) {
-    b.addEventListener("click", function () {
-      var inp = $(b.dataset.eye);
-      inp.type = inp.type === "password" ? "text" : "password";
-    });
-  });
-
-  // ---------- Import ----------
-  function setStatus(id, text, kind) {
-    var el = $(id);
-    el.className = "card-status" + (kind ? " " + kind : "");
-    el.innerHTML = text;
-  }
-
-  function importTracks(service, token, statusId, btn) {
-    if (!token) { setStatus(statusId, "Введите токен доступа", "err"); return; }
-    if (!ipc) { setStatus(statusId, "Импорт доступен только в приложении", "err"); return; }
-
-    btn.disabled = true;
-    setStatus(statusId, '<span class="spin"></span> Импортируем…');
-
-    ipc.invoke("import-music", { service: service, token: token })
-      .then(function (result) {
-        var added = 0;
-        (result.tracks || []).forEach(function (t) {
-          t.id = t.id || service + "_" + Math.random().toString(36).slice(2);
-          t.src = t.url || null;
-          t.source = service;
-          tracks.push(t);
-          added++;
-        });
-        render();
-        if (result.warning) setStatus(statusId, result.warning, "err");
-        else setStatus(statusId, "Импортировано: " + added, "ok");
-        if (added) toast("Импортировано треков: " + added);
-      })
-      .catch(function (err) {
-        setStatus(statusId, String(err && err.message ? err.message : err), "err");
-      })
-      .then(function () { btn.disabled = false; });
-  }
-
-  $("vk-import").addEventListener("click", function () {
-    importTracks("vk", $("vk-token").value.trim(), "vk-status", this);
-  });
-  $("ya-import").addEventListener("click", function () {
-    importTracks("yandex", $("ya-token").value.trim(), "ya-status", this);
-  });
-  $("sp-import").addEventListener("click", function () {
-    importTracks("spotify", $("sp-token").value.trim(), "sp-status", this);
-  });
-
   // Space toggles playback unless typing
   document.addEventListener("keydown", function (e) {
     var tag = (document.activeElement && document.activeElement.tagName) || "";
-    if (e.code === "Space" && tag !== "INPUT" && tag !== "TEXTAREA") {
+    if (e.code === "Space" && tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "BUTTON") {
       e.preventDefault();
       $("btn-play").click();
     }
   });
 
-  render();
+  window.addEventListener("beforeunload", flushSave);
+
+  // ---------- Boot ----------
+  renderAll();
+  loadLibrary();
 })();
 </script>
 </body>

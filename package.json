@@ -1,6 +1,6 @@
 {
   "name": "Sonor",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Music player with VK Music, Yandex Music, and Spotify imports in blue theme",
   "main": "node_modules/expo/AppEntry.js",
   "author": "Sonor Music",
@@ -24,6 +24,8 @@
     "expo-linear-gradient": "~12.3.0",
     "expo-blur": "~12.4.1",
     "expo-media-library": "~15.4.1",
+    "expo-file-system": "~15.4.1",
+    "blueimp-md5": "^2.19.0",
     "react-native-vector-icons": "^10.0.0",
     "uuid": "^9.0.0",
     "expo-splash-screen": "~0.20.5",

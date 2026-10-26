@@ -1,6 +1,6 @@
 // Track list rendered as simple rows (avoids nested VirtualizedList inside ScrollView)
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { BlurView } from 'expo-blur';
 
 const SOURCE_LABELS = {
@@ -44,10 +44,14 @@ const TrackList = ({ tracks, onPlayTrack, currentTrack }) => {
           >
             <BlurView intensity={18} tint="dark" style={styles.trackBlur}>
               <View style={styles.trackInfo}>
-                <View style={[styles.trackNumber, isCurrent && styles.currentTrackNumber]}>
-                  <Text style={[styles.trackNumberText, isCurrent && styles.currentTrackNumberText]}>
-                    {isCurrent ? '▶' : index + 1}
-                  </Text>
+                <View style={[styles.artwork, isCurrent && styles.currentArtwork]}>
+                  {item.image ? (
+                    <Image source={{ uri: item.image }} style={styles.artworkImage} />
+                  ) : (
+                    <Text style={[styles.trackNumberText, isCurrent && styles.currentTrackNumberText]}>
+                      {isCurrent ? '▶' : index + 1}
+                    </Text>
+                  )}
                 </View>
                 <View style={styles.trackDetails}>
                   <Text style={styles.trackTitle} numberOfLines={1}>
@@ -63,6 +67,11 @@ const TrackList = ({ tracks, onPlayTrack, currentTrack }) => {
                       </Text>
                     ) : null}
                   </View>
+                  {item.album ? (
+                    <Text style={styles.albumName} numberOfLines={1}>
+                      {item.album}
+                    </Text>
+                  ) : null}
                 </View>
               </View>
               <Text style={styles.trackDuration}>
@@ -93,7 +102,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 12,
+    padding: 10,
     backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderRadius: 14,
     borderWidth: 1,
@@ -102,20 +111,26 @@ const styles = StyleSheet.create({
   trackInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 11,
     flex: 1,
     minWidth: 0
   },
-  trackNumber: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+  artwork: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     backgroundColor: 'rgba(0, 212, 255, 0.14)',
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
+    overflow: 'hidden'
   },
-  currentTrackNumber: {
-    backgroundColor: '#00d4ff'
+  currentArtwork: {
+    borderWidth: 1.5,
+    borderColor: '#00d4ff'
+  },
+  artworkImage: {
+    width: '100%',
+    height: '100%'
   },
   trackNumberText: {
     color: '#bfe6f5',
@@ -123,7 +138,7 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   currentTrackNumberText: {
-    color: '#032730'
+    color: '#00d4ff'
   },
   trackDetails: {
     flex: 1,
@@ -144,6 +159,11 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: '#8fb2c2',
     flexShrink: 1
+  },
+  albumName: {
+    fontSize: 10.5,
+    color: '#6f95a6',
+    marginTop: 2
   },
   sourceBadge: {
     fontSize: 8.5,

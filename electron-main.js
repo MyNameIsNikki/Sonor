@@ -1,8 +1,12 @@
 const { app, BrowserWindow, ipcMain, Menu, screen } = require('electron');
 const path = require('path');
-const https = require('https');
+const fs = require('fs');
+const { importService, resolveYandexStream } = require('./src/services/importers');
 
 let mainWindow;
+
+// Токены живут только в памяти процесса и никогда не пишутся на диск.
+const importTokens = new Map();
 
 function createWindow() {
   const workArea = screen.getPrimaryDisplay().workAreaSize;
@@ -29,6 +33,13 @@ function createWindow() {
   });
 
   Menu.setApplicationMenu(null);
+
+  mainWindow.once('ready-to-show', () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
 
   if (process.env.NODE_ENV === 'development') {
     mainWindow.loadURL('http://localhost:19006');
@@ -73,175 +84,124 @@ ipcMain.on('close-window', () => {
   if (mainWindow) mainWindow.close();
 });
 
-// ---------- HTTP helper ----------
-function getJson(targetUrl, headers) {
-  return new Promise((resolve, reject) => {
-    const req = https.get(targetUrl, { headers: headers || {} }, (res) => {
-      let data = '';
-      res.setEncoding('utf8');
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        if (res.statusCode && res.statusCode >= 400) {
-          reject(new Error('HTTP ' + res.statusCode + ': ' + data.slice(0, 180).replace(/\s+/g, ' ')));
-          return;
-        }
-        try {
-          resolve(JSON.parse(data));
-        } catch (err) {
-          reject(new Error('Некорректный ответ API: ' + data.slice(0, 180).replace(/\s+/g, ' ')));
-        }
-      });
-    });
-    req.setTimeout(20000, () => {
-      req.destroy(new Error('Превышено время ожидания ответа API'));
-    });
-    req.on('error', reject);
-  });
+// ---------- Persistence ----------
+function libraryFile() {
+  return path.join(app.getPath('userData'), 'library.json');
 }
 
-const MAX_TRACKS = 500;
-
-// ---------- VK Music ----------
-async function importVK(token) {
-  const data = await getJson(
-    'https://api.vk.com/method/audio.get?access_token=' + encodeURIComponent(token) +
-    '&v=5.131&count=200'
-  );
-  if (data.error) {
-    throw new Error(data.error.error_msg || data.error.error_message || 'Ошибка VK API');
-  }
-  const items = (data.response && data.response.items) || [];
-  return items.slice(0, MAX_TRACKS).map((item) => ({
-    id: 'vk_' + item.id,
-    title: item.title || 'Без названия',
-    artist: item.artist || 'Неизвестно',
-    album: '',
-    duration: typeof item.duration === 'number' ? item.duration : 0,
-    url: item.url || null,
-    source: 'vk'
-  }));
+function emptyLibrary() {
+  return { tracks: [], collections: [], savedAt: null };
 }
 
-// ---------- Yandex Music ----------
-async function importYandex(token) {
-  const headers = { Authorization: 'OAuth ' + token };
-  const playlistsData = await getJson('https://api.music.yandex.net/users/me/playlists', headers);
-
-  const playlists =
-    (playlistsData.result && playlistsData.result.playlists) ||
-    playlistsData.playlists ||
-    (Array.isArray(playlistsData.result) ? playlistsData.result : []);
-
-  if (!playlists.length) {
-    throw new Error('Плейлисты не найдены. Проверьте токен Яндекс Музыки.');
-  }
-
-  const out = [];
-  for (const playlist of playlists) {
-    if (out.length >= MAX_TRACKS) break;
-    const kind = playlist.kind;
-    if (kind === undefined || kind === null) continue;
-    try {
-      const tracksData = await getJson(
-        'https://api.music.yandex.net/users/me/playlists/' + kind + '/tracks',
-        headers
-      );
-      const raw =
-        (tracksData.result && tracksData.result.tracks) ||
-        tracksData.tracks ||
-        (Array.isArray(tracksData.result) ? tracksData.result : []);
-
-      raw.forEach((entry) => {
-        if (out.length >= MAX_TRACKS) return;
-        const track = entry.track || entry;
-        if (!track) return;
-        const artists = Array.isArray(track.artists)
-          ? track.artists.map((a) => a.name).filter(Boolean).join(', ')
-          : '';
-        out.push({
-          id: 'yandex_' + (track.id || Math.random().toString(36).slice(2)),
-          title: track.title || track.name || 'Без названия',
-          artist: artists || 'Неизвестно',
-          album: (track.albums && track.albums[0] && track.albums[0].title) || '',
-          duration: track.durationMs ? track.durationMs / 1000 : (track.duration || 0),
-          url: track.preview || null,
-          source: 'yandex'
-        });
-      });
-    } catch (err) {
-      // Skip individual playlist failures, keep importing the rest
-    }
-  }
-
-  if (!out.length) {
-    throw new Error('Не удалось получить треки Яндекс Музыки.');
-  }
-  return out;
+function sanitizeTrack(track) {
+  if (!track || !track.id) return null;
+  return {
+    id: String(track.id),
+    externalId: track.externalId ? String(track.externalId) : null,
+    title: String(track.title || 'Без названия'),
+    artist: String(track.artist || 'Неизвестный исполнитель'),
+    album: String(track.album || ''),
+    duration: Number(track.duration) || 0,
+    url: track.url || null,
+    image: track.image || null,
+    source: String(track.source || '')
+  };
 }
 
-// ---------- Spotify ----------
-async function importSpotify(token) {
-  const headers = { Authorization: 'Bearer ' + token };
-  const out = [];
-  let nextUrl = 'https://api.spotify.com/v1/me/playlists?limit=50';
-  let pages = 0;
-
-  while (nextUrl && out.length < MAX_TRACKS && pages < 10) {
-    pages++;
-    const data = await getJson(nextUrl, headers);
-    if (data.error) {
-      throw new Error(data.error.message || 'Ошибка Spotify API');
-    }
-
-    const items = data.items || [];
-    for (const playlist of items) {
-      if (out.length >= MAX_TRACKS) break;
-      if (!playlist || !playlist.id) continue;
-      try {
-        const tracksData = await getJson(
-          'https://api.spotify.com/v1/playlists/' + playlist.id + '/tracks?limit=100',
-          headers
-        );
-        (tracksData.items || []).forEach((entry) => {
-          if (out.length >= MAX_TRACKS) return;
-          const track = entry && entry.track;
-          if (!track || !track.id) return;
-          out.push({
-            id: 'spotify_' + track.id + '_' + out.length,
-            title: track.name || 'Без названия',
-            artist: (track.artists || []).map((a) => a.name).join(', ') || 'Неизвестно',
-            album: (track.album && track.album.name) || '',
-            duration: track.duration_ms ? track.duration_ms / 1000 : 0,
-            url: track.preview_url || null,
-            image: (track.album && track.album.images && track.album.images[0] && track.album.images[0].url) || null,
-            source: 'spotify'
-          });
-        });
-      } catch (err) {
-        // Skip playlist on error
-      }
-    }
-
-    nextUrl = data.next || null;
-  }
-
-  if (!out.length) {
-    throw new Error('Не удалось получить треки Spotify.');
-  }
-  return out;
+function sanitizeCollection(collection) {
+  if (!collection || !collection.id) return null;
+  return {
+    id: String(collection.id),
+    source: String(collection.source || ''),
+    type: String(collection.type || 'playlist'),
+    title: String(collection.title || 'Без названия'),
+    subtitle: String(collection.subtitle || ''),
+    image: collection.image || null,
+    trackIds: Array.isArray(collection.trackIds)
+      ? collection.trackIds.slice(0, 20000).map(String)
+      : []
+  };
 }
 
+function sanitizeLibrary(input) {
+  const data = input && typeof input === 'object' ? input : {};
+  const tracks = Array.isArray(data.tracks)
+    ? data.tracks.slice(0, 20000).map(sanitizeTrack).filter(Boolean)
+    : [];
+  const collections = Array.isArray(data.collections)
+    ? data.collections.slice(0, 2000).map(sanitizeCollection).filter(Boolean)
+    : [];
+  return { version: 1, tracks: tracks, collections: collections, savedAt: new Date().toISOString() };
+}
+
+function readLibrary() {
+  try {
+    const raw = fs.readFileSync(libraryFile(), 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.tracks)) return emptyLibrary();
+    return {
+      tracks: parsed.tracks.map(sanitizeTrack).filter(Boolean),
+      collections: Array.isArray(parsed.collections)
+        ? parsed.collections.map(sanitizeCollection).filter(Boolean)
+        : [],
+      savedAt: parsed.savedAt || null
+    };
+  } catch (err) {
+    if (err.code === 'ENOENT') return emptyLibrary();
+    console.error('Не удалось прочитать библиотеку:', err.message);
+    return emptyLibrary();
+  }
+}
+
+async function saveLibrary(input) {
+  const data = sanitizeLibrary(input);
+  const target = libraryFile();
+  const temp = target + '.tmp';
+  await fs.promises.mkdir(path.dirname(target), { recursive: true });
+  await fs.promises.writeFile(temp, JSON.stringify(data), 'utf8');
+  await fs.promises.rename(temp, target);
+  return { ok: true, savedAt: data.savedAt };
+}
+
+ipcMain.handle('load-library', async () => readLibrary());
+
+ipcMain.handle('save-library', async (event, payload) => {
+  try {
+    return await saveLibrary(payload);
+  } catch (err) {
+    console.error('Не удалось сохранить библиотеку:', err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
+// ---------- Import ----------
 ipcMain.handle('import-music', async (event, payload) => {
   const service = payload && payload.service;
-  const token = payload && payload.token;
+  const token = payload && payload.token && String(payload.token).trim();
 
   if (!token) throw new Error('Токен не указан');
+  if (['vk', 'yandex', 'spotify'].indexOf(service) === -1) {
+    throw new Error('Неизвестный сервис: ' + service);
+  }
 
-  let tracks = [];
-  if (service === 'vk') tracks = await importVK(token);
-  else if (service === 'yandex') tracks = await importYandex(token);
-  else if (service === 'spotify') tracks = await importSpotify(token);
-  else throw new Error('Неизвестный сервис: ' + service);
+  importTokens.set(service, token);
 
-  return { tracks: tracks };
+  return importService(service, token, function (progress) {
+    if (event.sender && !event.sender.isDestroyed()) {
+      event.sender.send('import-progress', progress);
+    }
+  });
+});
+
+ipcMain.handle('resolve-track-url', async (event, payload) => {
+  const id = payload && payload.id;
+  if (!id) throw new Error('Не указан идентификатор трека');
+
+  const token = importTokens.get('yandex');
+  if (!token) {
+    throw new Error('Ссылки Яндекс Музыки истекли. Импортируйте музыку заново.');
+  }
+
+  const url = await resolveYandexStream(String(id).replace(/^yandex_/, ''), token);
+  return { url: url };
 });

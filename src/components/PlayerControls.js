@@ -59,6 +59,11 @@ const PlayerControls = ({
               </Text>
             ) : null}
           </View>
+          {track?.album ? (
+            <Text style={styles.albumName} numberOfLines={1}>
+              {track.album}
+            </Text>
+          ) : null}
         </View>
       </View>
 
@@ -141,6 +146,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#a0c4d8',
     flexShrink: 1
+  },
+  albumName: {
+    fontSize: 10.5,
+    color: '#6f95a6',
+    marginTop: 2
   },
   sourceBadge: {
     fontSize: 9,
