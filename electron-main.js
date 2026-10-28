@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, Menu, screen, shell } = require('electron')
 const path = require('path');
 const fs = require('fs');
 const { importService, importPublicLink, resolveYandexStream, checkToken } = require('./src/services/importers');
+const { searchFreeMusic, resolveAudiusStream, downloadFreeTrack } = require('./src/services/freeMusic');
 const tokenStore = require('./src/services/tokenStore');
 
 // Стабильная папка данных: не зависит от имени исполняемого файла и
@@ -147,6 +148,52 @@ ipcMain.handle('check-token', async (event, payload) => {
   }
 });
 
+// ---------- Free music (Audius / ccMixter / Internet Archive) ----------
+ipcMain.handle('free-search', async (event, payload) => {
+  const source = payload && payload.source ? String(payload.source) : 'all';
+  if (['all', 'audius', 'ccmixter', 'archive'].indexOf(source) === -1) {
+    throw new Error('Неизвестный каталог');
+  }
+  const query = String((payload && payload.query) || 'lofi').trim().slice(0, 80) || 'lofi';
+  try {
+    const result = await searchFreeMusic(query, source);
+    return Object.assign({ ok: true }, result);
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle('free-resolve', async (event, payload) => {
+  const id = payload && payload.id;
+  if (!id) return { ok: false, error: 'Не указан трек Audius' };
+  try {
+    const url = await resolveAudiusStream(String(id));
+    return { ok: true, url: url };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle('free-download', async (event, payload) => {
+  try {
+    const url = payload && payload.url ? String(payload.url) : '';
+    if (!url) throw new Error('Не указана ссылка на файл');
+    if (payload && payload.source === 'audius') {
+      throw new Error('Audius разрешает только прослушивание');
+    }
+
+    const destination = path.join(app.getPath('music'), 'Sonor');
+    const result = await downloadFreeTrack(url, destination, {
+      title: payload && payload.title ? String(payload.title).slice(0, 180) : 'track',
+      artist: payload && payload.artist ? String(payload.artist).slice(0, 180) : '',
+      source: payload && payload.source ? String(payload.source) : ''
+    });
+    return { ok: true, path: result.path, size: result.size, name: result.name };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
 // ---------- Persistence ----------
 function libraryFile() {
   return path.join(app.getPath('userData'), 'library.json');
@@ -171,7 +218,12 @@ function sanitizeTrack(track) {
     source: String(track.source || ''),
     provider: track.provider ? String(track.provider) : null,
     origin: track.origin ? String(track.origin) : null,
-    public: track.public === true
+    public: track.public === true,
+    license: track.license ? String(track.license).slice(0, 240) : null,
+    licenseUrl: track.licenseUrl ? String(track.licenseUrl) : null,
+    filePageUrl: track.filePageUrl ? String(track.filePageUrl) : null,
+    downloadable: track.downloadable === true,
+    streamOnly: track.streamOnly === true
   };
 }
 
