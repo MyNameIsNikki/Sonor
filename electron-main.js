@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { importService, importPublicLink, resolveYandexStream, checkToken } = require('./src/services/importers');
 const { searchFreeMusic, resolveAudiusStream, downloadFreeTrack } = require('./src/services/freeMusic');
+const { importPlaylistFile } = require('./src/services/playlistImport');
 const tokenStore = require('./src/services/tokenStore');
 
 // Стабильная папка данных: не зависит от имени исполняемого файла и
@@ -189,6 +190,18 @@ ipcMain.handle('free-download', async (event, payload) => {
       source: payload && payload.source ? String(payload.source) : ''
     });
     return { ok: true, path: result.path, size: result.size, name: result.name };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
+// ---------- Playlist files (M3U / PLS / XSPF / CSV / JSON) ----------
+ipcMain.handle('import-playlist-file', async (event, payload) => {
+  const filePath = payload && payload.path ? String(payload.path) : '';
+  if (!filePath) return { ok: false, error: 'Файл плейлиста не выбран' };
+  try {
+    const result = importPlaylistFile(filePath);
+    return Object.assign({ ok: true }, result);
   } catch (err) {
     return { ok: false, error: err && err.message ? err.message : String(err) };
   }

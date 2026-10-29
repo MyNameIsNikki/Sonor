@@ -853,6 +853,11 @@
     margin-bottom: 12px;
     flex-wrap: wrap;
   }
+  .transfer-card {
+    border-color: rgba(34, 211, 238, .18);
+    background: linear-gradient(90deg, rgba(34, 211, 238, .055), #0a161d 58%);
+  }
+  .transfer-card .link-copy span { line-height: 1.45; }
   .link-copy { min-width: 150px; flex: 1; }
   .link-copy b { display: block; font-size: 12px; color: #cfe6ee; font-weight: 600; }
   .link-copy span { color: var(--muted-2); font-size: 10.5px; }
@@ -1360,7 +1365,7 @@
           <div class="side-tip-title">✦ Совет</div>
           <p>Перетащите аудиофайлы в окно плеера — они сразу появятся в библиотеке.</p>
         </div>
-        <div class="side-version">SONOR 1.3 · DESKTOP</div>
+        <div class="side-version">SONOR 1.4 · DESKTOP</div>
       </div>
     </aside>
 
@@ -1601,6 +1606,15 @@
           <div class="card-status" id="link-status" style="flex-basis:100%;margin-top:0"></div>
         </div>
 
+        <div class="link-card transfer-card">
+          <div class="link-copy">
+            <b>Перенос плейлиста из VK / Яндекса</b>
+            <span>M3U, M3U8, PLS, XSPF, CSV или JSON с прямыми аудиоссылками или локальными файлами</span>
+          </div>
+          <button class="btn" id="playlist-import">Выбрать файл</button>
+          <div class="card-status" id="playlist-status" style="flex-basis:100%;margin-top:0"></div>
+        </div>
+
         <div class="dropzone" id="dropzone"><b>Перетащите аудиофайлы</b> сюда, чтобы добавить их в библиотеку</div>
       </section>
     </main>
@@ -1636,7 +1650,8 @@
 </div>
 
 <div class="toasts" id="toasts"></div>
-<input type="file" id="file-input" accept="audio/*" multiple style="display:none">
+<input type="file" id="file-input" accept="audio/*,.m3u,.m3u8,.pls,.xspf,.csv,.json,.txt" multiple style="display:none">
+<input type="file" id="playlist-input" accept=".m3u,.m3u8,.pls,.xspf,.csv,.json,.txt,text/plain,application/json" multiple style="display:none">
 <audio id="audio" preload="metadata"></audio>
 
 <script>
@@ -2225,13 +2240,25 @@
   }
 
   // ---------- Files ----------
+  var playlistBusy = false;
+  var playlistQueue = Promise.resolve();
+
+  function isPlaylistFile(name) {
+    return /\.(m3u8?|pls|xspf|csv|json|txt)$/i.test(name || "");
+  }
+
   function addFiles(fileList) {
     var added = 0;
+    var playlists = [];
     activeCollectionId = null;
     $("search").value = "";
     visibleLimit = 300;
 
     Array.prototype.forEach.call(fileList, function (file) {
+      if (isPlaylistFile(file.name)) {
+        if (file.path) playlists.push(file);
+        return;
+      }
       var isAudio = (file.type && file.type.indexOf("audio") === 0) ||
         /\.(mp3|flac|wav|m4a|aac|ogg|oga|opus|wma|aiff?|alac)$/i.test(file.name || "");
       if (!isAudio) return;
@@ -2249,11 +2276,112 @@
       added++;
     });
 
-    if (!added) { toast("Аудиофайлы не найдены", true); return; }
-    renderAll();
-    scheduleSave();
-    toast("Добавлено треков: " + added);
-    if (current === -1 && tracks.length) playTrack(tracks[0]);
+    if (!added && !playlists.length) { toast("Аудиофайлы не найдены", true); return; }
+    if (added) {
+      renderAll();
+      scheduleSave();
+      toast("Добавлено треков: " + added);
+      if (current === -1 && tracks.length) playTrack(tracks[0]);
+    }
+    playlists.forEach(function (file) {
+      playlistQueue = playlistQueue.then(function () {
+        return importPlaylistPath(file.path, file.name);
+      });
+    });
+  }
+
+  function importPlaylistPath(filePath, fileName) {
+    if (!ipc) {
+      toast("Импорт плейлиста доступен только в приложении", true);
+      return;
+    }
+    if (!filePath) {
+      setStatus("playlist-status", "Не удалось получить путь к файлу", "err");
+      return;
+    }
+    if (playlistBusy) {
+      toast("Дождитесь завершения текущего импорта", true);
+      return;
+    }
+
+    playlistBusy = true;
+    var button = $("playlist-import");
+    if (button) button.disabled = true;
+    setStatus("playlist-status", '<span class="spin"></span> Читаем «' + esc(fileName || "плейлист") + '»…');
+
+    return ipc.invoke("import-playlist-file", { path: filePath }).then(function (result) {
+      if (!result || result.ok === false) {
+        throw new Error(result && result.error ? result.error : "Не удалось прочитать плейлист");
+      }
+
+      var added = 0;
+      var duplicates = 0;
+      var collectionIds = [];
+
+      result.tracks.forEach(function (track) {
+        var existing = findTrackById(track.id);
+        if (!existing && track.path) {
+          for (var i = 0; i < tracks.length; i++) {
+            if (tracks[i].path && tracks[i].path.toLowerCase() === track.path.toLowerCase()) {
+              existing = tracks[i];
+              break;
+            }
+          }
+        }
+        if (existing) {
+          duplicates++;
+          collectionIds.push(existing.id);
+          return;
+        }
+        if (track.path && !track.src) track.src = localFileUrl(track.path);
+        tracks.push(track);
+        added++;
+        collectionIds.push(track.id);
+      });
+
+      if (result.collection && collectionIds.length) {
+        result.collection.trackIds = collectionIds;
+        var collection = findCollection(result.collection.id);
+        if (collection) {
+          collection.title = result.collection.title;
+          collection.subtitle = result.collection.subtitle;
+          collection.trackIds = collectionIds;
+        } else {
+          collections.push(result.collection);
+        }
+      }
+
+      if (added || result.collection) {
+        renderAll();
+        scheduleSave();
+      }
+
+      var warning = result.warnings && result.warnings.length ? " · " + result.warnings[0] : "";
+      var skipped = result.skipped || 0;
+      if (added) {
+        setStatus(
+          "playlist-status",
+          "✓ " + esc(result.name) + ": добавлено " + added +
+          (duplicates ? ", уже было " + duplicates : "") +
+          (skipped ? ", пропущено " + skipped : "") + esc(warning),
+          "ok"
+        );
+        toast("Плейлист добавлен: " + added + " треков");
+      } else {
+        setStatus(
+          "playlist-status",
+          "Все " + result.tracks.length + " треков уже есть в библиотеке" + esc(warning),
+          "ok"
+        );
+        toast("Все треки уже в библиотеке");
+      }
+    }).catch(function (err) {
+      setStatus("playlist-status", "✕ " + esc(err && err.message ? err.message : err), "err");
+      toast("Не удалось импортировать плейлист", true);
+    }).finally(function () {
+      playlistBusy = false;
+      if (button) button.disabled = false;
+    });
   }
 
   // ---------- Free music ----------
@@ -2949,6 +3077,13 @@
   $("btn-add").addEventListener("click", function () { $("file-input").click(); });
   $("file-input").addEventListener("change", function () {
     addFiles(this.files);
+    this.value = "";
+  });
+  $("playlist-import").addEventListener("click", function () {
+    $("playlist-input").click();
+  });
+  $("playlist-input").addEventListener("change", function () {
+    if (this.files && this.files.length) addFiles(this.files);
     this.value = "";
   });
   $("search").addEventListener("input", function () {
