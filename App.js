@@ -287,6 +287,24 @@ export default function App() {
     }
   };
 
+  const forgetServiceToken = async (service) => {
+    try {
+      await SecureStore.deleteItemAsync(TOKEN_KEYS[service]);
+    } catch (error) {
+      console.log('Не удалось удалить токен:', error.message);
+    }
+    tokensRef.current[service] = '';
+    setSavedServices((previous) => previous.filter((item) => item !== service));
+    return true;
+  };
+
+  const handleYandexOAuthToken = async (token) => {
+    const value = String(token || '').trim();
+    if (!value) return false;
+    tokensRef.current.yandex = value;
+    return rememberToken('yandex', value, true);
+  };
+
   const mergeImportedResult = (service, result) => {
     const imported = (result.tracks || []).map((track) => ({
       ...track,
@@ -737,7 +755,7 @@ export default function App() {
           <View style={styles.header}>
             <Text style={styles.appTitle}>🎧 SONOR</Text>
             <Text style={styles.subtitle}>VK • Яндекс • Spotify • Audius</Text>
-            <Text style={styles.version}>MOBILE 1.4 · FREE MUSIC</Text>
+            <Text style={styles.version}>MOBILE 1.5.1 · SECURE OAUTH</Text>
           </View>
 
           <View style={styles.statsRow}>
@@ -792,6 +810,8 @@ export default function App() {
               savedServices={savedServices}
               encryptionAvailable={secureStoreAvailable}
               getToken={getToken}
+              onYandexToken={handleYandexOAuthToken}
+              onForgetToken={forgetServiceToken}
             />
           )}
 

@@ -2,8 +2,8 @@
  "expo": {
  "name": "Sonor",
  "slug": "sonor",
- "version": "1.4.0",
- "description": "Music player with VK, Yandex and Spotify import, free music catalogs and playlist transfer in a blue theme",
+ "version": "1.5.1",
+ "description": "Music player with VK, Yandex and Spotify import, free music catalogs and secure OAuth in a blue theme",
  "orientation": "portrait",
  "icon": "./icon.png",
  "userInterfaceStyle": "dark",
@@ -17,7 +17,7 @@
  "assetBundlePatterns": ["**/*"],
  "ios": {
  "bundleIdentifier": "com.sonor.music",
- "buildNumber": "4",
+ "buildNumber": "5",
  "infoPlist": {
  "NSCameraUsageDescription": "Это приложение не использует камеру",
  "NSMicrophoneUsageDescription": "Это приложение использует микрофон для записи аудио"
@@ -25,7 +25,7 @@
  },
  "android": {
  "package": "com.sonor.music",
- "versionCode": 4,
+ "versionCode": 5,
  "permissions": ["READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE", "READ_MEDIA_AUDIO"]
  },
  "web": {

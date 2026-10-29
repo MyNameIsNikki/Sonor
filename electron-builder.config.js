@@ -2,7 +2,7 @@
 module.exports = {
   appId: 'com.sonor.music',
   productName: 'Sonor Music Player',
-  copyright: 'Sonor Music',
+  copyright: 'Copyright © 2026 ANV',
   directories: {
     output: 'release',
     buildResources: 'build'
@@ -25,6 +25,7 @@ module.exports = {
   win: {
     target: ['nsis', 'zip'],
     icon: 'build/icon.ico',
+    publisherName: 'ANV',
     signAndEditExecutable: false
   },
   nsis: {
