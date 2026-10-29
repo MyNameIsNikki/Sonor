@@ -7,7 +7,11 @@ const SOURCE_LABELS = {
   local: 'ЛОКАЛЬНО',
   vk: 'VK',
   yandex: 'ЯНДЕКС',
-  spotify: 'SPOTIFY'
+  spotify: 'SPOTIFY',
+  link: 'ССЫЛКА',
+  audius: 'AUDIUS',
+  ccmixter: 'CCMIXTER',
+  archive: 'ARCHIVE'
 };
 
 const PlayerControls = ({
@@ -42,7 +46,7 @@ const PlayerControls = ({
   return (
     <Animated.View style={[styles.playerContainer, { opacity: fadeAnim }]}>
       <View style={styles.trackInfo}>
-        <LinearGradient colors={['#00d4ff', '#0077a8']} style={styles.albumPlaceholder}>
+        <LinearGradient colors={['#22d3ee', '#0891b2']} style={styles.albumPlaceholder}>
           <Text style={styles.albumIcon}>♪</Text>
         </LinearGradient>
         <View style={styles.trackDetails}>
@@ -83,7 +87,7 @@ const PlayerControls = ({
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.playBtn} onPress={onToggle} activeOpacity={0.85}>
-          <LinearGradient colors={['#4facfe', '#00d4ff']} style={styles.playGradient}>
+          <LinearGradient colors={['#22d3ee', '#06b6d4']} style={styles.playGradient}>
             <Text style={isPlaying ? styles.pauseIcon : styles.playIcon}>
               {isPlaying ? '⏸' : '▶'}
             </Text>
@@ -155,8 +159,8 @@ const styles = StyleSheet.create({
   sourceBadge: {
     fontSize: 9,
     letterSpacing: 0.6,
-    color: '#00d4ff',
-    backgroundColor: 'rgba(0, 212, 255, 0.12)',
+    color: '#22d3ee',
+    backgroundColor: 'rgba(34, 211, 238, 0.1)',
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 999,
@@ -173,7 +177,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#00d4ff',
+    backgroundColor: '#22d3ee',
     borderRadius: 999
   },
   timeContainer: {

@@ -10,13 +10,13 @@ import {
   TextInput
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import {
   importVKMusic,
   importYandexMusic,
   importSpotify,
   importPublicLink
 } from '../services/musicImport';
+import { pickPlaylistFiles } from '../services/playlistImportMobile';
 
 const SERVICES = {
   vk: { name: 'VK Music', colors: ['#4facfe', '#00f2fe'] },
@@ -27,6 +27,7 @@ const SERVICES = {
 const MusicImporter = ({
   onImportComplete,
   onLinkComplete,
+  onPlaylistComplete,
   savedServices = [],
   encryptionAvailable = true,
   getToken = () => ''
@@ -37,6 +38,7 @@ const MusicImporter = ({
   const [remember, setRemember] = useState(true);
   const [linkUrl, setLinkUrl] = useState('');
   const [importingLink, setImportingLink] = useState(false);
+  const [importingPlaylist, setImportingPlaylist] = useState(false);
   const [tokens, setTokens] = useState({
     vk: '',
     yandex: '',
@@ -110,8 +112,25 @@ const MusicImporter = ({
     }
   };
 
+  const handlePlaylistImport = async () => {
+    if (importingPlaylist) return;
+    setImportingPlaylist(true);
+    setProgress('Читаем файл плейлиста…');
+    try {
+      const result = await pickPlaylistFiles();
+      if (result) {
+        onPlaylistComplete(result);
+      }
+    } catch (error) {
+      Alert.alert('Не удалось перенести плейлист', error.message || 'Проверьте формат файла.');
+    } finally {
+      setImportingPlaylist(false);
+      setProgress('');
+    }
+  };
+
   return (
-    <BlurView intensity={30} tint="light" style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>Импорт всей музыки</Text>
         <TouchableOpacity onPress={() => setShowTokenInputs(!showTokenInputs)}>
@@ -224,11 +243,36 @@ const MusicImporter = ({
       </View>
       {importingLink && <Text style={styles.linkProgress}>{progress || 'Импортируем…'}</Text>}
 
+      <View style={styles.divider} />
+
+      <Text style={styles.linkTitle}>Перенос плейлиста из VK / Яндекса</Text>
+      <Text style={styles.linkHint}>
+        M3U, M3U8, PLS, XSPF, CSV или JSON с прямыми аудиоссылками. Можно выбрать сразу несколько файлов.
+      </Text>
+      <TouchableOpacity
+        style={[styles.playlistButton, importingPlaylist && styles.importing]}
+        onPress={handlePlaylistImport}
+        disabled={importingPlaylist || importingLink || !!importingService}
+        activeOpacity={0.82}
+      >
+        {importingPlaylist ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator color="#04161c" size="small" />
+            <Text style={styles.playlistButtonText}>{progress || 'Читаем плейлист…'}</Text>
+          </View>
+        ) : (
+          <Text style={styles.playlistButtonText}>📁 Выбрать файлы плейлистов</Text>
+        )}
+      </TouchableOpacity>
+      <Text style={styles.playlistHint}>
+        Нужны прямые ссылки на аудио. Ссылки на страницы VK, Яндекса или Spotify пропускаются — это не обход авторизации сервисов.
+      </Text>
+
       <Text style={styles.footnote}>
         Spotify отдаёт 30-секундные превью и может быть недоступен в вашем регионе.
         Ссылки VK и Яндекс Музыки со временем истекают — повторный импорт обновит их.
       </Text>
-    </BlurView>
+    </View>
   );
 };
 
@@ -236,11 +280,11 @@ const styles = StyleSheet.create({
   container: {
     marginHorizontal: 4,
     marginBottom: 18,
-    padding: 18,
-    borderRadius: 18,
-    backgroundColor: 'rgba(15, 32, 39, 0.7)',
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: '#0a151b',
     borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.3)',
+    borderColor: '#172832',
     overflow: 'hidden'
   },
   headerRow: {
@@ -321,7 +365,19 @@ const styles = StyleSheet.create({
   },
   linkBtnText: { color: '#041e27', fontSize: 12, fontWeight: '800' },
   linkProgress: { fontSize: 10.5, color: '#8fb2c2', marginTop: 7 },
-  footnote: { fontSize: 10.5, color: '#6f95a6', lineHeight: 16, marginTop: 13 }
+  playlistButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(34, 211, 238, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(34, 211, 238, 0.42)'
+  },
+  playlistButtonText: { color: '#22d3ee', fontSize: 12.5, fontWeight: '800' },
+  playlistHint: { fontSize: 10, color: '#6d8793', lineHeight: 15, marginTop: 8 },
+  footnote: { fontSize: 10.5, color: '#6d8793', lineHeight: 16, marginTop: 13 }
 });
 
 export default MusicImporter;

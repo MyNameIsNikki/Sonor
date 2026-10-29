@@ -1,14 +1,16 @@
 // Track list rendered as simple rows (avoids nested VirtualizedList inside ScrollView)
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
-import { BlurView } from 'expo-blur';
 
 const SOURCE_LABELS = {
   local: 'ЛОКАЛЬНО',
   vk: 'VK',
   yandex: 'ЯНДЕКС',
   spotify: 'SPOTIFY',
-  link: 'ССЫЛКА'
+  link: 'ССЫЛКА',
+  audius: 'AUDIUS',
+  ccmixter: 'CCMIXTER',
+  archive: 'ARCHIVE'
 };
 
 const TrackList = ({ tracks, onPlayTrack, currentTrack }) => {
@@ -43,7 +45,7 @@ const TrackList = ({ tracks, onPlayTrack, currentTrack }) => {
             onPress={() => onPlayTrack(item)}
             activeOpacity={0.75}
           >
-            <BlurView intensity={18} tint="dark" style={styles.trackBlur}>
+            <View style={[styles.trackBlur, isCurrent && styles.trackBlurCurrent]}>
               <View style={styles.trackInfo}>
                 <View style={[styles.artwork, isCurrent && styles.currentArtwork]}>
                   {item.image ? (
@@ -80,7 +82,7 @@ const TrackList = ({ tracks, onPlayTrack, currentTrack }) => {
               <Text style={styles.trackDuration}>
                 {item.duration ? formatDuration(item.duration) : '--:--'}
               </Text>
-            </BlurView>
+            </View>
           </TouchableOpacity>
         );
       })}
@@ -95,21 +97,21 @@ const styles = StyleSheet.create({
     overflow: 'hidden'
   },
   currentTrack: {
-    shadowColor: '#00d4ff',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
-    elevation: 6
+    borderWidth: 0
   },
   trackBlur: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.055)',
-    borderRadius: 14,
+    backgroundColor: '#0a151b',
+    borderRadius: 13,
     borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.14)'
+    borderColor: '#172832'
+  },
+  trackBlurCurrent: {
+    borderColor: 'rgba(34, 211, 238, 0.42)',
+    backgroundColor: 'rgba(34, 211, 238, 0.055)'
   },
   trackInfo: {
     flexDirection: 'row',
@@ -129,7 +131,7 @@ const styles = StyleSheet.create({
   },
   currentArtwork: {
     borderWidth: 1.5,
-    borderColor: '#00d4ff'
+    borderColor: '#22d3ee'
   },
   artworkImage: {
     width: '100%',
@@ -171,8 +173,8 @@ const styles = StyleSheet.create({
   sourceBadge: {
     fontSize: 8.5,
     letterSpacing: 0.5,
-    color: '#00d4ff',
-    backgroundColor: 'rgba(0, 212, 255, 0.12)',
+    color: '#22d3ee',
+    backgroundColor: 'rgba(34, 211, 238, 0.1)',
     paddingHorizontal: 6,
     paddingVertical: 1.5,
     borderRadius: 999,

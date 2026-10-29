@@ -7,7 +7,10 @@ const SOURCE_LABELS = {
   vk: 'VK',
   yandex: 'ЯНДЕКС',
   spotify: 'SPOTIFY',
-  link: 'ССЫЛКА'
+  link: 'ССЫЛКА',
+  audius: 'AUDIUS',
+  ccmixter: 'CCMIXTER',
+  archive: 'ARCHIVE'
 };
 
 const CollectionGrid = ({ collections, kind, onOpen }) => {
@@ -77,11 +80,11 @@ const styles = StyleSheet.create({
   coverWrap: {
     width: '100%',
     aspectRatio: 1,
-    borderRadius: 16,
+    borderRadius: 14,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: '#0a151b',
     borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.18)',
+    borderColor: '#172832',
     marginBottom: 8
   },
   cover: {

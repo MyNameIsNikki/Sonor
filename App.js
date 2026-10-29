@@ -20,7 +20,9 @@ import MusicImporter from './src/components/MusicImporter';
 import PlayerControls from './src/components/PlayerControls';
 import TrackList from './src/components/TrackList';
 import CollectionGrid from './src/components/CollectionGrid';
+import FreeMusic from './src/components/FreeMusic';
 import { importMusic, resolveYandexStream } from './src/services/musicImport';
+import { resolveAudiusStream, downloadFreeTrack } from './src/services/freeMusicMobile';
 
 const LIBRARY_FILE = FileSystem.documentDirectory
   ? `${FileSystem.documentDirectory}sonor-library.json`
@@ -43,13 +45,17 @@ const SOURCE_LABELS = {
   vk: 'VK',
   yandex: 'ЯНДЕКС',
   spotify: 'SPOTIFY',
-  link: 'ССЫЛКА'
+  link: 'ССЫЛКА',
+  audius: 'AUDIUS',
+  ccmixter: 'CCMIXTER',
+  archive: 'ARCHIVE'
 };
 
 const TABS = [
   { id: 'all', label: 'Все' },
   { id: 'playlists', label: 'Плейлисты' },
-  { id: 'albums', label: 'Альбомы' }
+  { id: 'albums', label: 'Альбомы' },
+  { id: 'free', label: 'Свободная' }
 ];
 
 export default function App() {
@@ -82,7 +88,7 @@ export default function App() {
       const localIds = new Set(localTracks.map((track) => track.id));
       const imported = saved.tracks
         .filter((track) => track && track.id && !localIds.has(track.id))
-        .map((track) => ({ ...track, src: track.url || null }));
+        .map((track) => ({ ...track, src: track.path || track.url || null }));
       setTracks([...localTracks, ...imported]);
       setCollections(saved.collections);
       const remembered = await loadRememberedTokens();
@@ -116,9 +122,15 @@ export default function App() {
           album: track.album || '',
           duration: track.duration || 0,
           url: track.url || null,
+          path: track.path || null,
           image: track.image || null,
           source: track.source,
           provider: track.provider || null,
+          license: track.license || null,
+          licenseUrl: track.licenseUrl || null,
+          filePageUrl: track.filePageUrl || null,
+          downloadable: !!track.downloadable,
+          streamOnly: !!track.streamOnly,
           origin: track.origin || null,
           public: !!track.public
         }));
@@ -165,6 +177,11 @@ export default function App() {
   const albumCollections = useMemo(
     () => collections.filter((collection) => collection.type === 'album'),
     [collections]
+  );
+
+  const freeCount = useMemo(
+    () => tracks.filter((track) => ['audius', 'ccmixter', 'archive'].includes(track.source)).length,
+    [tracks]
   );
 
   const loadDeviceTracks = async () => {
@@ -376,7 +393,7 @@ export default function App() {
 
   const handlePlayTrack = async (track) => {
     let playable = track;
-    let uri = track.uri || track.url;
+    let uri = track.path || track.uri || track.url || track.src;
 
     const isYandex =
       track.source === 'yandex' || (track.source === 'link' && track.provider === 'yandex');
@@ -416,12 +433,65 @@ export default function App() {
       }
     }
 
+    if (!uri && track.source === 'audius' && track.externalId) {
+      setResolvingTrackId(track.id);
+      try {
+        const directUrl = await resolveAudiusStream(track.externalId);
+        playable = { ...track, url: directUrl, src: directUrl };
+        setTracks((previous) =>
+          previous.map((item) => (item.id === track.id ? { ...item, url: directUrl, src: directUrl } : item))
+        );
+        uri = directUrl;
+      } catch (error) {
+        Alert.alert('Audius', `Не удалось получить поток.\n\n${error.message}`);
+        return;
+      } finally {
+        setResolvingTrackId(null);
+      }
+    }
+
     try {
       await startPlayback(playable, uri);
     } catch (error) {
       console.error('Ошибка воспроизведения:', error);
       Alert.alert('Ошибка', 'Не удалось воспроизвести трек');
     }
+  };
+
+  const handleFreePlay = async (track) => {
+    const existing = tracks.find((item) => item.id === track.id);
+    const item = existing || {
+      ...track,
+      src: track.src || track.url || null,
+      duration: Math.round(track.duration || 0)
+    };
+    if (!existing) {
+      setTracks((previous) => [...previous, item]);
+    }
+    setActiveTab('free');
+    await handlePlayTrack(item);
+  };
+
+  const handleFreeDownload = async (track) => {
+    const result = await downloadFreeTrack(track);
+    setTracks((previous) => {
+      const exists = previous.some((item) => item.id === track.id);
+      if (exists) {
+        return previous.map((item) =>
+          item.id === track.id
+            ? { ...item, path: result.path, url: result.path, src: result.path }
+            : item
+        );
+      }
+      return [...previous, {
+        ...track,
+        path: result.path,
+        url: result.path,
+        src: result.path,
+        duration: Math.round(track.duration || 0)
+      }];
+    });
+    return result;
   };
 
   const playAdjacent = async (direction) => {
@@ -513,6 +583,34 @@ export default function App() {
     Alert.alert('Ссылка добавлена', message);
   };
 
+  const handlePlaylistComplete = (result) => {
+    const imported = result.tracks || [];
+    const importedCollections = result.collections || [];
+    const trackIds = new Set(imported.map((track) => track.id));
+    const collectionIds = new Set(importedCollections.map((collection) => collection.id));
+
+    setTracks((previous) => [
+      ...previous.filter((track) => !trackIds.has(track.id)),
+      ...imported
+    ]);
+    setCollections((previous) => [
+      ...previous.filter((collection) => !collectionIds.has(collection.id)),
+      ...importedCollections
+    ]);
+    setActiveCollectionId(null);
+    setActiveTab('all');
+    setVisibleLimit(300);
+    setShowImport(false);
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+
+    let message = `Добавлено треков: ${imported.length}`;
+    if (importedCollections.length) message += `\nПлейлистов: ${importedCollections.length}`;
+    if (result.warnings && result.warnings.length) {
+      message += `\n\n${result.warnings.slice(0, 3).join('\n')}`;
+    }
+    Alert.alert('Плейлист добавлен', message);
+  };
+
   const openCollection = (collection) => {
     setActiveCollectionId(collection.id);
     setVisibleLimit(300);
@@ -566,6 +664,16 @@ export default function App() {
       );
     }
 
+    if (activeTab === 'free') {
+      return (
+        <FreeMusic
+          tracks={tracks}
+          onPlayTrack={handleFreePlay}
+          onDownloadTrack={handleFreeDownload}
+        />
+      );
+    }
+
     if (activeTab === 'playlists') {
       return (
         <View>
@@ -614,12 +722,13 @@ export default function App() {
   };
 
   return (
-    <LinearGradient colors={['#0f2027', '#203345', '#2c5364']} style={styles.container}>
+    <LinearGradient colors={['#060d12', '#07131a', '#081a22']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="light-content" />
 
         <ScrollView
           ref={scrollRef}
+          keyboardShouldPersistTaps="handled"
           contentContainerStyle={[
             styles.scrollContent,
             { paddingBottom: currentTrack ? 200 : 40 }
@@ -627,7 +736,8 @@ export default function App() {
         >
           <View style={styles.header}>
             <Text style={styles.appTitle}>🎧 SONOR</Text>
-            <Text style={styles.subtitle}>VK • Яндекс Музыка • Spotify</Text>
+            <Text style={styles.subtitle}>VK • Яндекс • Spotify • Audius</Text>
+            <Text style={styles.version}>MOBILE 1.4 · FREE MUSIC</Text>
           </View>
 
           <View style={styles.statsRow}>
@@ -650,9 +760,9 @@ export default function App() {
             onPress={() => setShowImport(!showImport)}
             activeOpacity={0.85}
           >
-            <LinearGradient colors={['#00d4ff', '#0099cc']} style={styles.importToggleGradient}>
+            <LinearGradient colors={['#22d3ee', '#06b6d4']} style={styles.importToggleGradient}>
               <Text style={styles.importToggleText}>
-                {showImport ? 'Скрыть импорт' : '📥 Импорт всей музыки'}
+                {showImport ? 'Скрыть импорт' : '📥 Импорт и перенос музыки'}
               </Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -678,13 +788,19 @@ export default function App() {
             <MusicImporter
               onImportComplete={handleImportComplete}
               onLinkComplete={handleLinkComplete}
+              onPlaylistComplete={handlePlaylistComplete}
               savedServices={savedServices}
               encryptionAvailable={secureStoreAvailable}
               getToken={getToken}
             />
           )}
 
-          <View style={styles.tabs}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.tabsScroll}
+            contentContainerStyle={styles.tabs}
+          >
             {TABS.map((tab) => {
               const active = activeTab === tab.id && !activeCollectionId;
               const count =
@@ -692,7 +808,9 @@ export default function App() {
                   ? playlistCollections.length
                   : tab.id === 'albums'
                     ? albumCollections.length
-                    : tracks.length;
+                    : tab.id === 'free'
+                      ? freeCount
+                      : tracks.length;
               return (
                 <TouchableOpacity
                   key={tab.id}
@@ -706,10 +824,10 @@ export default function App() {
                 </TouchableOpacity>
               );
             })}
-          </View>
+          </ScrollView>
 
           {resolvingTrackId ? (
-            <Text style={styles.resolveHint}>Загружаем ссылку из Яндекс Музыки…</Text>
+            <Text style={styles.resolveHint}>Загружаем ссылку на трек…</Text>
           ) : null}
 
           {renderContent()}
@@ -750,17 +868,21 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   appTitle: {
-    fontSize: 30,
+    fontSize: 29,
     fontWeight: '800',
-    color: '#00d4ff',
-    marginBottom: 4,
-    textShadowColor: 'rgba(0,212,255,0.3)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12
+    color: '#22d3ee',
+    marginBottom: 4
   },
   subtitle: {
-    fontSize: 12.5,
-    color: '#a0c4d8'
+    fontSize: 12,
+    color: '#8aa5b2'
+  },
+  version: {
+    fontSize: 8.5,
+    letterSpacing: 1.2,
+    color: '#4f6b78',
+    marginTop: 5,
+    fontWeight: '700'
   },
   statsRow: {
     flexDirection: 'row',
@@ -798,9 +920,9 @@ const styles = StyleSheet.create({
     borderRadius: 13
   },
   importToggleText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: 'bold'
+    color: '#04161c',
+    fontSize: 14.5,
+    fontWeight: '800'
   },
   syncStatus: {
     flexDirection: 'row',
@@ -831,29 +953,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#8fd8f0'
   },
+  tabsScroll: {
+    marginBottom: 18
+  },
   tabs: {
     flexDirection: 'row',
     gap: 7,
-    marginBottom: 18
+    paddingRight: 4
   },
   tab: {
-    flex: 1,
+    minWidth: 92,
     paddingVertical: 9,
-    paddingHorizontal: 6,
+    paddingHorizontal: 12,
     borderRadius: 10,
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: '#0a151b',
     borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.1)'
+    borderColor: '#172832'
   },
   tabActive: {
-    backgroundColor: 'rgba(0, 212, 255, 0.16)',
-    borderColor: 'rgba(0, 212, 255, 0.45)'
+    backgroundColor: 'rgba(34, 211, 238, 0.12)',
+    borderColor: 'rgba(34, 211, 238, 0.5)'
   },
   tabText: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '600',
-    color: '#8fb2c2'
+    color: '#7f99a7'
   },
   tabTextActive: {
     color: '#dff7ff'
@@ -861,7 +986,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 19,
     fontWeight: '800',
-    color: '#00d4ff',
+    color: '#e7f3f8',
     marginBottom: 12
   },
   sectionHint: {
