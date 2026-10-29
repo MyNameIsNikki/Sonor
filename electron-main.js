@@ -5,6 +5,7 @@ const { importService, importPublicLink, resolveYandexStream, checkToken } = req
 const { searchFreeMusic, resolveAudiusStream, downloadFreeTrack } = require('./src/services/freeMusic');
 const { importPlaylistFile } = require('./src/services/playlistImport');
 const tokenStore = require('./src/services/tokenStore');
+const oauth = require('./src/services/oauth');
 
 // Стабильная папка данных: не зависит от имени исполняемого файла и
 // productName в установщике, поэтому библиотека переживает обновления.
@@ -140,12 +141,85 @@ ipcMain.handle('check-token', async (event, payload) => {
   let token = payload && payload.token;
   try {
     if (!token && payload && payload.saved) {
-      token = tokenStore.loadTokens()[service];
+      token = await oauth.getValidToken(service);
     }
     const account = await checkToken(service, token);
     return { ok: true, account: account };
   } catch (err) {
     return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
+// ---------- OAuth connection center ----------
+function oauthFailure(err) {
+  return { ok: false, error: err && err.message ? err.message : String(err) };
+}
+
+ipcMain.handle('oauth-config-get', async () => {
+  try {
+    return {
+      ok: true,
+      config: oauth.loadConfig(),
+      status: await oauth.getAuthStatus()
+    };
+  } catch (err) {
+    return oauthFailure(err);
+  }
+});
+
+ipcMain.handle('oauth-config-save', async (event, payload) => {
+  try {
+    const config = await oauth.saveConfig(payload && payload.config ? payload.config : payload);
+    return { ok: true, config: config, status: await oauth.getAuthStatus() };
+  } catch (err) {
+    return oauthFailure(err);
+  }
+});
+
+ipcMain.handle('oauth-status', async () => {
+  try {
+    return { ok: true, status: await oauth.getAuthStatus() };
+  } catch (err) {
+    return oauthFailure(err);
+  }
+});
+
+ipcMain.handle('oauth-login', async (event, payload) => {
+  const service = payload && payload.service;
+  try {
+    if (['vk', 'spotify'].indexOf(service) === -1) {
+      throw new Error('Для Яндекса используется вход по коду устройства');
+    }
+    const result = await oauth.login(service, mainWindow);
+    return Object.assign({ ok: true }, result);
+  } catch (err) {
+    return oauthFailure(err);
+  }
+});
+
+ipcMain.handle('oauth-yandex-start', async () => {
+  try {
+    return Object.assign({ ok: true }, await oauth.startYandexDevice());
+  } catch (err) {
+    return oauthFailure(err);
+  }
+});
+
+ipcMain.handle('oauth-yandex-poll', async (event, payload) => {
+  try {
+    return await oauth.pollYandexDevice(payload && payload.flowId);
+  } catch (err) {
+    return oauthFailure(err);
+  }
+});
+
+ipcMain.handle('oauth-logout', async (event, payload) => {
+  try {
+    await oauth.logout(payload && payload.service);
+    importTokens.delete(payload && payload.service);
+    return { ok: true, status: await oauth.getAuthStatus() };
+  } catch (err) {
+    return oauthFailure(err);
   }
 });
 
@@ -322,7 +396,7 @@ ipcMain.handle('import-music', async (event, payload) => {
     throw new Error('Неизвестный сервис: ' + service);
   }
 
-  const saved = tokenStore.loadTokens()[service];
+  const saved = provided ? null : await oauth.getValidToken(service);
   const token = provided || saved;
   if (!token) throw new Error('Токен не указан');
 
@@ -373,19 +447,18 @@ ipcMain.handle('forget-token', async (event, payload) => {
 });
 
 ipcMain.handle('sync-saved', async (event) => {
-  const tokens = tokenStore.loadTokens();
-  const services = Object.keys(tokens).filter(function (service) {
-    return !!tokens[service] && ['vk', 'yandex', 'spotify'].indexOf(service) !== -1;
-  });
+  const services = tokenStore.savedServices();
   if (!services.length) return { results: {}, errors: {}, services: [] };
 
   const results = {};
   const errors = {};
   for (let i = 0; i < services.length; i++) {
     const service = services[i];
-    importTokens.set(service, tokens[service]);
     try {
-      results[service] = await importService(service, tokens[service], function (progress) {
+      const token = await oauth.getValidToken(service);
+      if (!token) throw new Error('Сохранённый токен не найден');
+      importTokens.set(service, token);
+      results[service] = await importService(service, token, function (progress) {
         reportProgress(event, progress);
       });
     } catch (err) {
@@ -399,7 +472,14 @@ ipcMain.handle('resolve-track-url', async (event, payload) => {
   const id = payload && payload.id;
   if (!id) throw new Error('Не указан идентификатор трека');
 
-  const token = importTokens.get('yandex') || null;
+  let token = importTokens.get('yandex') || null;
+  if (!token) {
+    try {
+      token = await oauth.getValidToken('yandex');
+    } catch (err) {
+      token = null;
+    }
+  }
   if (!token && !(payload && payload.public)) {
     throw new Error('Ссылки Яндекс Музыки истекли. Импортируйте музыку заново.');
   }

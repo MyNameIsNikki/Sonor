@@ -842,6 +842,132 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  .oauth-card {
+    margin-bottom: 14px;
+    padding: 16px;
+    border: 1px solid rgba(34, 211, 238, .18);
+    border-radius: 10px;
+    background: linear-gradient(100deg, rgba(34, 211, 238, .055), #0a161d 62%);
+  }
+  .oauth-head { display: flex; align-items: center; gap: 12px; }
+  .oauth-icon {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    border-radius: 8px;
+    background: var(--cyan-soft);
+    color: var(--cyan);
+    font-size: 18px;
+  }
+  .oauth-copy { flex: 1; min-width: 0; }
+  .oauth-copy b { display: block; font-size: 13px; font-weight: 650; color: #d8eaf1; }
+  .oauth-copy p { margin: 3px 0 0; color: var(--muted-2); font-size: 10.5px; line-height: 1.5; }
+  .oauth-settings {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 12px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+  }
+  .oauth-settings[hidden] { display: none; }
+  .oauth-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .oauth-field.full { grid-column: 1 / -1; }
+  .oauth-field label { font-size: 10px; color: #6c8794; }
+  .oauth-field input {
+    width: 100%;
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    outline: 0;
+    background: #081218;
+    font-size: 11.5px;
+  }
+  .oauth-field input:focus { border-color: rgba(34, 211, 238, .45); }
+  .oauth-hint { grid-column: 1 / -1; margin: 0; color: #5f7c89; font-size: 10.5px; line-height: 1.55; }
+  .oauth-hint a { color: var(--cyan); text-decoration: none; }
+  .oauth-save-row { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .oauth-grid { margin-top: 14px; border-top: 1px solid var(--line); }
+  .oauth-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(23, 40, 50, .7);
+  }
+  .oauth-row:last-child { border-bottom: 0; padding-bottom: 0; }
+  .oauth-row .card-icon { width: 28px; height: 28px; font-size: 10px; }
+  .oauth-provider { flex: 1; min-width: 0; }
+  .oauth-provider b { display: block; font-size: 11.5px; font-weight: 600; color: #cfe6ee; }
+  .oauth-provider span { display: block; margin-top: 2px; color: #5f7c89; font-size: 10px; }
+  .oauth-state { min-width: 92px; color: #5f7b88; font-size: 10.5px; line-height: 1.4; }
+  .oauth-state.ok { color: var(--green); }
+  .oauth-state.err { color: var(--red); }
+  .oauth-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+  .oauth-badge {
+    display: inline-block;
+    margin-left: 5px;
+    padding: 1px 5px;
+    border: 1px solid rgba(34, 211, 238, .25);
+    border-radius: 4px;
+    color: var(--cyan);
+    font-size: 8.5px;
+    letter-spacing: .04em;
+    vertical-align: 1px;
+  }
+  .token-caption { margin-top: 12px; color: #5f7c89; font-size: 10px; }
+
+  .modal { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; }
+  .modal[hidden] { display: none; }
+  .modal-backdrop { position: absolute; inset: 0; background: rgba(2, 8, 12, .74); }
+  .modal-card {
+    position: relative;
+    width: min(420px, calc(100vw - 40px));
+    padding: 20px;
+    border: 1px solid rgba(34, 211, 238, .23);
+    border-radius: 12px;
+    background: #0b171e;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .45);
+  }
+  .modal-head { display: flex; align-items: flex-start; gap: 12px; }
+  .modal-title { flex: 1; font-size: 16px; font-weight: 650; color: #e7f3f8; }
+  .modal-close {
+    width: 26px;
+    height: 26px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .modal-close:hover { color: #fff; border-color: rgba(255, 255, 255, .25); }
+  .modal-text { margin: 10px 0 14px; color: var(--muted-2); font-size: 11px; line-height: 1.55; }
+  .device-code {
+    padding: 13px;
+    border: 1px dashed rgba(34, 211, 238, .35);
+    border-radius: 8px;
+    background: #071218;
+    color: var(--cyan);
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-align: center;
+    user-select: all;
+  }
+  .modal-url { margin-top: 9px; color: #5f7c89; font-size: 10px; word-break: break-all; }
+  .modal-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .modal-status { min-height: 16px; margin-top: 10px; font-size: 10.5px; color: var(--muted-2); }
+  .modal-status.ok { color: var(--green); }
+  .modal-status.err { color: var(--red); }
+  @media (max-width: 980px) {
+    .oauth-settings { grid-template-columns: 1fr; }
+    .oauth-row { flex-wrap: wrap; }
+    .oauth-state { min-width: 0; flex: 1; }
+  }
+
   .link-card {
     display: flex;
     align-items: center;
@@ -1365,7 +1491,7 @@
           <div class="side-tip-title">✦ Совет</div>
           <p>Перетащите аудиофайлы в окно плеера — они сразу появятся в библиотеке.</p>
         </div>
-        <div class="side-version">SONOR 1.4 · DESKTOP</div>
+        <div class="side-version">SONOR 1.5 · DESKTOP</div>
       </div>
     </aside>
 
@@ -1531,6 +1657,74 @@
           <span class="saved-summary" id="saved-summary"></span>
         </div>
 
+        <div class="oauth-card">
+          <div class="oauth-head">
+            <div class="oauth-icon">⚿</div>
+            <div class="oauth-copy">
+              <b>Безопасный вход через OAuth</b>
+              <p>Пароль вводится только на сайте сервиса. Токен хранится зашифрованно на этом компьютере.</p>
+            </div>
+            <button class="btn small ghost" id="oauth-settings-toggle">Настроить</button>
+          </div>
+
+          <div class="oauth-settings" id="oauth-settings" hidden>
+            <div class="oauth-field">
+              <label for="oauth-vk-client">VK Client ID <a href="https://dev.vk.com/ru/admin/apps" data-external>создать →</a></label>
+              <input id="oauth-vk-client" type="text" placeholder="12345678" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="oauth-field">
+              <label for="oauth-ya-client">Яндекс Client ID <a href="https://oauth.yandex.ru/" data-external>создать →</a></label>
+              <input id="oauth-ya-client" type="text" placeholder="xxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="oauth-field">
+              <label for="oauth-sp-client">Spotify Client ID <a href="https://developer.spotify.com/dashboard" data-external>создать →</a></label>
+              <input id="oauth-sp-client" type="text" placeholder="xxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="oauth-field">
+              <label for="oauth-sp-redirect">Spotify Redirect URI</label>
+              <input id="oauth-sp-redirect" type="text" value="http://127.0.0.1:53682/callback" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="oauth-hint full">
+              Client ID не является секретом. Client Secret не нужен и не сохраняется.<br>
+              В настройках Spotify укажите Redirect URI <b>http://127.0.0.1:53682/callback</b>.
+            </div>
+            <div class="oauth-save-row full">
+              <button class="btn small primary" id="oauth-save">Сохранить настройки</button>
+              <span class="card-status" id="oauth-settings-status"></span>
+            </div>
+          </div>
+
+          <div class="oauth-grid">
+            <div class="oauth-row">
+              <div class="card-icon vk">VK</div>
+              <div class="oauth-provider"><b>VK Музыка</b><span>Вход через браузер с вашим Client ID</span></div>
+              <span class="oauth-state" id="vk-oauth-status"></span>
+              <div class="oauth-actions">
+                <button class="btn small primary" id="vk-oauth">Войти</button>
+                <button class="btn small ghost" id="vk-logout" hidden>Выйти</button>
+              </div>
+            </div>
+            <div class="oauth-row">
+              <div class="card-icon yandex">Я</div>
+              <div class="oauth-provider"><b>Яндекс Музыка</b><span>Код подтверждения на сайте Яндекс ID</span></div>
+              <span class="oauth-state" id="ya-oauth-status"></span>
+              <div class="oauth-actions">
+                <button class="btn small primary" id="ya-oauth">Войти</button>
+                <button class="btn small ghost" id="ya-logout" hidden>Выйти</button>
+              </div>
+            </div>
+            <div class="oauth-row">
+              <div class="card-icon spotify">S</div>
+              <div class="oauth-provider"><b>Spotify</b><span>PKCE-вход через браузер</span></div>
+              <span class="oauth-state" id="sp-oauth-status"></span>
+              <div class="oauth-actions">
+                <button class="btn small primary" id="sp-oauth">Войти</button>
+                <button class="btn small ghost" id="sp-logout" hidden>Выйти</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="cards">
           <div class="card">
             <div class="card-head">
@@ -1540,6 +1734,7 @@
                 <div class="card-desc">Аудиозаписи и плейлисты</div>
               </div>
             </div>
+            <div class="token-caption">Или вставьте токен вручную</div>
             <div class="token-row">
               <input id="vk-token" type="password" placeholder="access_token" autocomplete="off" spellcheck="false">
               <button class="eye" data-eye="vk-token" title="Показать токен">◉</button>
@@ -1561,6 +1756,7 @@
                 <div class="card-desc">Плейлисты, любимое и альбомы</div>
               </div>
             </div>
+            <div class="token-caption">Или вставьте токен вручную</div>
             <div class="token-row">
               <input id="ya-token" type="password" placeholder="OAuth-токен" autocomplete="off" spellcheck="false">
               <button class="eye" data-eye="ya-token" title="Показать токен">◉</button>
@@ -1582,6 +1778,7 @@
                 <div class="card-desc">Плейлисты и треки</div>
               </div>
             </div>
+            <div class="token-caption">Или вставьте токен вручную</div>
             <div class="token-row">
               <input id="sp-token" type="password" placeholder="access_token" autocomplete="off" spellcheck="false">
               <button class="eye" data-eye="sp-token" title="Показать токен">◉</button>
@@ -1647,6 +1844,27 @@
       <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8">
     </div>
   </footer>
+</div>
+
+<div class="modal" id="oauth-modal" hidden>
+  <div class="modal-backdrop" data-oauth-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="oauth-modal-title">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="oauth-modal-title">Вход через Яндекс</div>
+        <div class="modal-text">Введите код на странице Яндекса. Пароль остаётся на сайте сервиса.</div>
+      </div>
+      <button class="modal-close" type="button" data-oauth-close aria-label="Закрыть">✕</button>
+    </div>
+    <div class="device-code" id="oauth-device-code">----</div>
+    <div class="modal-url" id="oauth-device-url">https://oauth.yandex.ru/device</div>
+    <div class="modal-actions">
+      <button class="btn primary" type="button" id="oauth-device-open">Открыть страницу</button>
+      <button class="btn ghost" type="button" id="oauth-device-copy">Скопировать код</button>
+      <button class="btn ghost" type="button" id="oauth-device-cancel">Отмена</button>
+    </div>
+    <div class="modal-status" id="oauth-device-status"></div>
+  </div>
 </div>
 
 <div class="toasts" id="toasts"></div>
@@ -2795,6 +3013,352 @@
   var syncStarted = false;
   var SERVICE_LABELS = { vk: "VK", yandex: "Яндекс", spotify: "Spotify" };
 
+  var oauthConfig = {
+    vkClientId: "",
+    yandexClientId: "",
+    yandexScope: "",
+    spotifyClientId: "",
+    spotifyRedirectUri: "http://127.0.0.1:53682/callback"
+  };
+  var oauthStatus = null;
+  var yandexFlow = null;
+  var oauthPollTimer = null;
+  var oauthBusy = false;
+
+  function oauthPrefix(service) {
+    return service === "yandex" ? "ya" : service === "spotify" ? "sp" : "vk";
+  }
+
+  function oauthClientField(service) {
+    return $("oauth-" + oauthPrefix(service) + "-client");
+  }
+
+  function oauthClientId(service) {
+    var key = service === "yandex" ? "yandexClientId" : service === "spotify" ? "spotifyClientId" : "vkClientId";
+    var field = oauthClientField(service);
+    return String((field && field.value) || oauthConfig[key] || "").trim();
+  }
+
+  function oauthAccountName(account) {
+    if (!account) return "подключено";
+    return account.name || account.login || account.id || "подключено";
+  }
+
+  function oauthSetState(service, text, kind) {
+    var el = $(oauthPrefix(service) + "-oauth-status");
+    if (!el) return;
+    el.className = "oauth-state" + (kind ? " " + kind : "");
+    el.innerHTML = text;
+  }
+
+  function oauthSetModalStatus(text, kind) {
+    var el = $("oauth-device-status");
+    if (!el) return;
+    el.className = "modal-status" + (kind ? " " + kind : "");
+    el.innerHTML = text;
+  }
+
+  function oauthApplyStatus(data) {
+    oauthStatus = data || {};
+    var services = oauthStatus.services || {};
+    var cfg = oauthStatus.config || {};
+
+    ["vk", "yandex", "spotify"].forEach(function (service) {
+      var info = services[service] || {};
+      var prefix = oauthPrefix(service);
+      var login = $(prefix + "-oauth");
+      var logout = $(prefix + "-logout");
+
+      if (login) {
+        login.textContent = info.saved && info.method && info.method !== "manual"
+          ? "Переподключить"
+          : "Войти";
+        login.disabled = false;
+      }
+      if (logout) logout.hidden = !info.saved;
+
+      if (info.saved) {
+        if (info.method === "manual") {
+          oauthSetState(service, "● Токен сохранён вручную", "");
+        } else {
+          oauthSetState(service, "✓ " + esc(oauthAccountName(info.account)), "ok");
+        }
+      } else if (info.clientIdConfigured) {
+        oauthSetState(service, "", "");
+      } else {
+        oauthSetState(service, "Нужен Client ID", "");
+      }
+    });
+
+    if (cfg.encryptionAvailable === false) {
+      setStatus("oauth-settings-status", "Шифрование недоступно — токены не сохраняются", "err");
+    }
+  }
+
+  function loadOAuthConfig() {
+    if (!ipc) return Promise.resolve(null);
+    return ipc.invoke("oauth-config-get")
+      .then(function (res) {
+        if (!res || res.ok === false) throw new Error((res && res.error) || "Не удалось загрузить настройки OAuth");
+        oauthConfig = Object.assign(oauthConfig, res.config || {});
+        $("oauth-vk-client").value = oauthConfig.vkClientId || "";
+        $("oauth-ya-client").value = oauthConfig.yandexClientId || "";
+        $("oauth-sp-client").value = oauthConfig.spotifyClientId || "";
+        $("oauth-sp-redirect").value = oauthConfig.spotifyRedirectUri || "http://127.0.0.1:53682/callback";
+        oauthApplyStatus(res.status || {});
+        return oauthConfig;
+      })
+      .catch(function (err) {
+        setStatus("oauth-settings-status", "✕ " + esc(err && err.message ? err.message : err), "err");
+        return null;
+      });
+  }
+
+  function refreshOAuthStatus() {
+    if (!ipc) return Promise.resolve(null);
+    return ipc.invoke("oauth-status")
+      .then(function (res) {
+        if (!res || res.ok === false) throw new Error((res && res.error) || "Не удалось получить статус OAuth");
+        oauthApplyStatus(res.status || res);
+        return oauthStatus;
+      })
+      .catch(function () { return null; });
+  }
+
+  function saveOAuthConfig(button) {
+    if (!ipc) {
+      setStatus("oauth-settings-status", "Настройки доступны только в приложении", "err");
+      return Promise.resolve(false);
+    }
+    var config = {
+      vkClientId: ($("oauth-vk-client").value || "").trim(),
+      yandexClientId: ($("oauth-ya-client").value || "").trim(),
+      spotifyClientId: ($("oauth-sp-client").value || "").trim(),
+      spotifyRedirectUri: ($("oauth-sp-redirect").value || "").trim()
+    };
+    if (!config.spotifyRedirectUri) config.spotifyRedirectUri = "http://127.0.0.1:53682/callback";
+
+    if (button) button.disabled = true;
+    setStatus("oauth-settings-status", '<span class="spin"></span> Сохраняем настройки…');
+    return ipc.invoke("oauth-config-save", { config: config })
+      .then(function (res) {
+        if (!res || res.ok === false) throw new Error((res && res.error) || "Не удалось сохранить настройки");
+        oauthConfig = Object.assign(oauthConfig, res.config || config);
+        setStatus("oauth-settings-status", "✓ Настройки сохранены", "ok");
+        oauthApplyStatus(res.status || {});
+        toast("Настройки OAuth сохранены");
+        return true;
+      })
+      .catch(function (err) {
+        setStatus("oauth-settings-status", "✕ " + esc(err && err.message ? err.message : err), "err");
+        return false;
+      })
+      .then(function (ok) {
+        if (button) button.disabled = false;
+        return ok;
+      });
+  }
+
+  function oauthOpenSettings(service) {
+    $("oauth-settings").hidden = false;
+    $("oauth-settings-toggle").textContent = "Скрыть";
+    var field = oauthClientField(service);
+    if (field) {
+      field.focus();
+      field.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+    setStatus(
+      "oauth-settings-status",
+      "Укажите Client ID приложения " + (SERVICE_LABELS[service] || service) + " и сохраните настройки",
+      "err"
+    );
+  }
+
+  function oauthOpenUrl(url) {
+    if (!/^https?:\/\//i.test(String(url || ""))) return;
+    if (ipc) ipc.invoke("open-external", url);
+    else window.open(url, "_blank", "noopener");
+  }
+
+  function oauthLogin(service, button) {
+    if (!ipc) {
+      oauthSetState(service, "Вход доступен только в приложении", "err");
+      return;
+    }
+    if (service === "yandex") {
+      oauthStartYandex(button);
+      return;
+    }
+    if (oauthBusy) return;
+    if (!oauthClientId(service)) {
+      oauthOpenSettings(service);
+      return;
+    }
+
+    var prefix = oauthPrefix(service);
+    oauthBusy = true;
+    if (button) button.disabled = true;
+    oauthSetState(service, '<span class="spin"></span> Ожидаем вход…');
+
+    ipc.invoke("oauth-login", { service: service })
+      .then(function (res) {
+        if (!res || res.ok === false) throw new Error((res && res.error) || "Не удалось войти");
+        oauthSetState(service, "✓ " + esc(oauthAccountName(res.account)), "ok");
+        toast((SERVICE_LABELS[service] || service) + ": вход выполнен");
+        return Promise.all([refreshOAuthStatus(), refreshSaved()]);
+      })
+      .catch(function (err) {
+        oauthSetState(service, "✕ " + esc(err && err.message ? err.message : err), "err");
+      })
+      .then(function () {
+        oauthBusy = false;
+        var login = $(prefix + "-oauth");
+        if (login) login.disabled = false;
+      });
+  }
+
+  function oauthStartYandex(button) {
+    if (!ipc) {
+      oauthSetState("yandex", "Вход доступен только в приложении", "err");
+      return;
+    }
+    if (yandexFlow) {
+      $("oauth-modal").hidden = false;
+      return;
+    }
+    if (!oauthClientId("yandex")) {
+      oauthOpenSettings("yandex");
+      return;
+    }
+    if (oauthBusy) return;
+
+    oauthBusy = true;
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Получаем код…";
+    }
+    oauthSetState("yandex", '<span class="spin"></span> Получаем код…');
+
+    ipc.invoke("oauth-yandex-start")
+      .then(function (res) {
+        if (!res || res.ok === false) throw new Error((res && res.error) || "Не удалось начать вход");
+        if (!res.flowId || !res.userCode) throw new Error("Яндекс не вернул код подтверждения");
+
+        yandexFlow = {
+          flowId: res.flowId,
+          interval: Number(res.interval) || 5,
+          expiresAt: Date.now() + (Number(res.expiresIn) || 300) * 1000,
+          verificationUrl: res.verificationUrl || "https://oauth.yandex.ru/device"
+        };
+
+        $("oauth-device-code").textContent = res.userCode;
+        $("oauth-device-url").textContent = yandexFlow.verificationUrl;
+        oauthSetModalStatus('<span class="spin"></span> Ожидаем подтверждения на сайте Яндекса…');
+        $("oauth-modal").hidden = false;
+        oauthSetState("yandex", '<span class="spin"></span> Ожидаем подтверждения…');
+        oauthOpenUrl(yandexFlow.verificationUrl);
+
+        oauthPollTimer = window.setTimeout(oauthPollYandex, Math.max(2, yandexFlow.interval) * 1000);
+      })
+      .catch(function (err) {
+        setStatus("oauth-settings-status", "✕ " + esc(err && err.message ? err.message : err), "err");
+        oauthSetState("yandex", "✕ " + esc(err && err.message ? err.message : err), "err");
+      })
+      .then(function () {
+        oauthBusy = false;
+        if (button) {
+          button.disabled = false;
+          button.textContent = yandexFlow ? "Ожидаем…" : "Войти";
+        }
+      });
+  }
+
+  function oauthPollYandex() {
+    if (!yandexFlow) return;
+    var flow = yandexFlow;
+
+    if (Date.now() > flow.expiresAt) {
+      oauthSetModalStatus("✕ Код истёк. Начните вход заново.", "err");
+      oauthSetState("yandex", "✕ Код истёк", "err");
+      yandexFlow = null;
+      return;
+    }
+
+    ipc.invoke("oauth-yandex-poll", { flowId: flow.flowId })
+      .then(function (res) {
+        if (yandexFlow !== flow) return;
+        if (!res || res.status === "pending") {
+          if (res && res.interval) flow.interval = Number(res.interval) || flow.interval;
+          oauthPollTimer = window.setTimeout(oauthPollYandex, Math.max(2, flow.interval + 1) * 1000);
+          return;
+        }
+        if (res.status === "ok") {
+          oauthSetModalStatus("✓ Вход выполнен", "ok");
+          oauthSetState("yandex", "✓ " + esc(oauthAccountName(res.account)), "ok");
+          toast("Яндекс: вход выполнен");
+          oauthCloseModal(true);
+          Promise.all([refreshOAuthStatus(), refreshSaved()]);
+          return;
+        }
+        throw new Error(res.error || "Не удалось войти");
+      })
+      .catch(function (err) {
+        if (yandexFlow !== flow) return;
+        var message = "✕ " + esc(err && err.message ? err.message : err);
+        oauthSetModalStatus(message, "err");
+        oauthSetState("yandex", message, "err");
+        yandexFlow = null;
+      });
+  }
+
+  function oauthCloseModal(keepStatus) {
+    if (oauthPollTimer) {
+      window.clearTimeout(oauthPollTimer);
+      oauthPollTimer = null;
+    }
+    if (!keepStatus) {
+      var status = $("oauth-device-status");
+      if (status) {
+        status.className = "modal-status";
+        status.textContent = "";
+      }
+    }
+    yandexFlow = null;
+    $("oauth-modal").hidden = true;
+    var login = $("ya-oauth");
+    if (login) {
+      login.disabled = false;
+      login.textContent = "Войти";
+    }
+  }
+
+  function oauthLogout(service) {
+    if (!ipc) return;
+    var prefix = oauthPrefix(service);
+    ipc.invoke("oauth-logout", { service: service })
+      .then(function (res) {
+        if (res && res.ok === false) throw new Error(res.error || "Не удалось выйти");
+        oauthSetState(service, "", "");
+        toast((SERVICE_LABELS[service] || service) + ": токен удалён");
+        return Promise.all([refreshOAuthStatus(), refreshSaved()]);
+      })
+      .catch(function (err) {
+        oauthSetState(service, "✕ " + esc(err && err.message ? err.message : err), "err");
+      });
+  }
+
+  function copyDeviceCode() {
+    var code = ($("oauth-device-code").textContent || "").trim();
+    if (!code || code === "----") return;
+    try {
+      var clipboard = require("electron").clipboard;
+      clipboard.writeText(code);
+      toast("Код скопирован");
+    } catch (err) {
+      toast("Не удалось скопировать код", true);
+    }
+  }
+
   function refreshSaved() {
     if (!ipc) return Promise.resolve([]);
     return ipc.invoke("get-saved-services")
@@ -2983,6 +3547,30 @@
   $("link-import").addEventListener("click", importLink);
   $("sync-saved").addEventListener("click", function () { syncSaved(true); });
 
+  $("oauth-settings-toggle").addEventListener("click", function () {
+    var panel = $("oauth-settings");
+    panel.hidden = !panel.hidden;
+    this.textContent = panel.hidden ? "Настроить" : "Скрыть";
+  });
+  $("oauth-save").addEventListener("click", function () {
+    saveOAuthConfig(this);
+  });
+  $("vk-oauth").addEventListener("click", function () { oauthLogin("vk", this); });
+  $("ya-oauth").addEventListener("click", function () { oauthLogin("yandex", this); });
+  $("sp-oauth").addEventListener("click", function () { oauthLogin("spotify", this); });
+  $("vk-logout").addEventListener("click", function () { oauthLogout("vk"); });
+  $("ya-logout").addEventListener("click", function () { oauthLogout("yandex"); });
+  $("sp-logout").addEventListener("click", function () { oauthLogout("spotify"); });
+  $("oauth-device-open").addEventListener("click", function () {
+    var url = (yandexFlow && yandexFlow.verificationUrl) || $("oauth-device-url").textContent;
+    oauthOpenUrl(url);
+  });
+  $("oauth-device-copy").addEventListener("click", copyDeviceCode);
+  $("oauth-device-cancel").addEventListener("click", function () { oauthCloseModal(); });
+  document.querySelectorAll("[data-oauth-close]").forEach(function (el) {
+    el.addEventListener("click", function () { oauthCloseModal(); });
+  });
+
   document.querySelectorAll(".eye").forEach(function (b) {
     b.addEventListener("click", function () {
       var inp = $(b.dataset.eye);
@@ -3130,6 +3718,7 @@
   loadLibrary()
     .then(refreshSaved)
     .then(function (services) {
+      loadOAuthConfig();
       if (services && services.length && !syncStarted) {
         syncStarted = true;
         syncSaved(false);

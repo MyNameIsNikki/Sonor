@@ -9,6 +9,7 @@
 - 🎧 Воспроизведение локальных файлов: MP3, FLAC, WAV, M4A, OGG
 - 💙 Премиальный тёмно-синий интерфейс: глубокий фон, циановые акценты, аккуратная типографика и плотные списки треков
 - 📥 Импорт **всей медиатеки**: треки, плейлисты и альбомы из VK Музыки, Яндекс Музыки и Spotify
+- 🔐 **Безопасный вход через OAuth**: Яндекс Device Flow, VK и Spotify в браузере с вашим Client ID; пароль вводится только на сайте сервиса, токен хранится зашифрованно
 - 🔓 Добавление **без токена** по публичной ссылке: Spotify, Яндекс Музыка, M3U/M3U8, PLS, XSPF и прямые аудиоссылки
 - 📦 **Перенос плейлистов** из других сервисов и плееров: импорт M3U/M3U8/PLS/XSPF/CSV/JSON с прямыми аудиоссылками или локальными файлами
 - 🌐 Раздел **«Свободная музыка»**: легальные каталоги Audius, ccMixter и Internet Archive — прослушивание и скачивание треков с открытыми лицензиями прямо в библиотеку
@@ -31,8 +32,8 @@
 
 | Платформа | Файл | Где взять |
 |---|---|---|
-| Windows (установщик) | `Sonor-Setup-1.4.0.exe` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` после сборки |
-| Windows (портативная) | `Sonor-Music-Player-1.4.0-win.zip` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` |
+| Windows (установщик) | `Sonor-Setup-1.5.0.exe` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` после сборки |
+| Windows (портативная) | `Sonor-Music-Player-1.5.0-win.zip` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` |
 | Android (APK) | `Sonor-1.4.0.apk` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или артефакт workflow **Build Android APK** |
 | iOS | `.ipa` | только через EAS Build (нужен Apple Developer) |
 
@@ -63,8 +64,8 @@ npm run build:windows
 
 Результат:
 
-- `release/Sonor-Setup-1.4.0.exe` — установщик с выбором папки, ярлыками на рабочем столе и в меню «Пуск»
-- `release/Sonor Music Player-1.4.0-win.zip` — портативная версия
+- `release/Sonor-Setup-1.5.0.exe` — установщик с выбором папки, ярлыками на рабочем столе и в меню «Пуск»
+- `release/Sonor Music Player-1.5.0-win.zip` — портативная версия
 - `release/win-unpacked/` — распакованное приложение
 
 Сборка не подписывается сертификатом (в конфиге `signAndEditExecutable: false`), поэтому Windows SmartScreen может показать предупреждение «Неизвестный издатель» — это нормально для неподписанных сборок.
@@ -116,7 +117,17 @@ npm run build:android
 
 Публичные ссылки Spotify работают, только если сервис доступен в вашей стране. При региональной блокировке (код 451) Sonor покажет понятное сообщение — используйте VPN или импорт с токеном.
 
-Полноценный вход через браузер (OAuth) в этой версии не встроен: для него нужны собственные зарегистрированные Client ID/Secret приложений VK, Яндекса и Spotify. Sonor не использует чужие публичные ключи.
+### Безопасный вход через OAuth
+
+Начиная с версии 1.5 Sonor умеет получать токены через официальный OAuth и **никогда не просит пароль от аккаунта**. Пароль вводится только на сайте сервиса, а токен сохраняется на компьютере в зашифрованном виде.
+
+- **Яндекс Музыка** — Device Flow: нажмите «Войти через Яндекс», скопируйте код и подтвердите вход на `oauth.yandex.ru/device`. Client Secret не нужен.
+- **VK Музыка** — вход в отдельном окне VK OAuth. Нужен собственный Client ID Standalone-приложения с доступом `audio`.
+- **Spotify** — OAuth PKCE в браузере. Нужен собственный Client ID; redirect URI должен совпадать с `http://127.0.0.1:53682/callback`. Client Secret не нужен.
+
+Client ID не является секретом и вводится в блоке «Настроить» на вкладке импорта. Sonor не использует чужие Client ID, VK service key или перехват токенов из DevTools. Кнопка «Выйти» удаляет сохранённый токен. Ручной ввод токена остаётся запасным вариантом.
+
+OAuth не обходит ограничения сервисов: VK может ограничивать `audio.get` для сторонних приложений, а токен Яндекса может не давать доступ к неофициальному Music API. Для публичных ссылок авторизация по-прежнему не требуется.
 
 ### Перенос плейлистов из VK / Яндекса
 
@@ -206,6 +217,7 @@ Spotify отдаёт только 30-секундные `preview_url` для ч�
 │       ├── playlistImport.js   # Импорт M3U/PLS/XSPF/CSV/JSON (Electron)
 │       ├── playlistImportMobile.js # Импорт плейлистов на мобильном
 │       ├── tokenStore.js       # Зашифрованное хранение токенов (Electron)
+│       ├── oauth.js            # OAuth: Яндекс Device Flow, VK, Spotify PKCE
 │       └── musicImport.js      # Полный импорт и публичные ссылки (мобильный)
 ├── android/                    # Нативная Android-обвязка
 ├── ios/                        # Нативная iOS-обвязка
