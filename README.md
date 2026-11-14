@@ -17,6 +17,7 @@
 - 💙 Премиальный тёмно-синий интерфейс: глубокий фон, циановые акценты, аккуратная типографика и плотные списки треков
 - 📥 Импорт **всей медиатеки**: треки, плейлисты и альбомы из VK Музыки, Яндекс Музыки и Spotify
 - 🔐 **Безопасный вход через OAuth**: Яндекс Device Flow на ПК и телефоне, VK и Spotify в браузере с вашим Client ID; пароль вводится только на сайте сервиса, токен хранится зашифрованно
+- ❓ **Подсказки «Где взять токен?»** рядом с ручным вводом на ПК и телефоне: пошаговая инструкция, ссылка на сайт сервиса и предупреждение о сроках действия токена
 - 🔓 Добавление **без токена** по публичной ссылке: Spotify, Яндекс Музыка, M3U/M3U8, PLS, XSPF и прямые аудиоссылки
 - 📦 **Перенос плейлистов** из других сервисов и плееров: импорт M3U/M3U8/PLS/XSPF/CSV/JSON с прямыми аудиоссылками или локальными файлами
 - 🌐 Раздел **«Свободная музыка»**: легальные каталоги Audius, ccMixter и Internet Archive — прослушивание и скачивание треков с открытыми лицензиями прямо в библиотеку
@@ -48,9 +49,9 @@
 
 | Платформа | Файл | Где взять |
 |---|---|---|
-| Windows (установщик) | `Sonor-Setup-1.9.1.exe` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` после сборки |
-| Windows (портативная) | `Sonor-Music-Player-1.9.1-win.zip` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` |
-| Android (APK) | `Sonor-1.9.1.apk` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или артефакт workflow **Build Android APK** |
+| Windows (установщик) | `Sonor-Setup-1.9.2.exe` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` после сборки |
+| Windows (портативная) | `Sonor-Music-Player-1.9.2-win.zip` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` |
+| Android (APK) | `Sonor-1.9.2.apk` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или артефакт workflow **Build Android APK** |
 | iOS | `.ipa` | только через EAS Build (нужен Apple Developer) |
 
 > Для телефонов собирается **APK** (Android) — формат установочного файла для мобильных. `.exe` — это формат Windows, на телефоне он не запускается.
@@ -91,8 +92,8 @@ npm run build:windows
 
 Результат:
 
-- `release/Sonor-Setup-1.9.1.exe` — установщик с выбором папки, ярлыками на рабочем столе и в меню «Пуск»
-- `release/Sonor Music Player-1.9.1-win.zip` — портативная версия
+- `release/Sonor-Setup-1.9.2.exe` — установщик с выбором папки, ярлыками на рабочем столе и в меню «Пуск»
+- `release/Sonor Music Player-1.9.2-win.zip` — портативная версия
 - `release/win-unpacked/` — распакованное приложение
 
 Сборка не подписывается сертификатом (в конфиге `signAndEditExecutable: false`), поэтому Windows SmartScreen может показать предупреждение «Неизвестный издатель» — это нормально для неподписанных сборок. В метаданных файлов и установщика издатель указан как **ANV**; чтобы Windows показывала имя издателя без предупреждения, нужен платный сертификат подписи кода.

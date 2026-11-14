@@ -1228,7 +1228,7 @@ export default function App() {
           <View style={styles.header}>
             <Text style={styles.appTitle}>🎧 SONOR</Text>
             <Text style={styles.subtitle}>VK • Яндекс • Spotify • Audius</Text>
-            <Text style={styles.version}>MOBILE 1.9.1 · SHUFFLE + REPEAT</Text>
+            <Text style={styles.version}>MOBILE 1.9.2 · TOKEN HELP</Text>
           </View>
 
           <View style={styles.statsRow}>

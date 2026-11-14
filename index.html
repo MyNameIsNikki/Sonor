@@ -971,6 +971,17 @@
     vertical-align: 1px;
   }
   .token-caption { margin-top: 12px; color: #5f7c89; font-size: 10px; }
+  .token-help-inline {
+    margin-left: 6px;
+    padding: 2px 7px;
+    border: 1px solid rgba(34, 211, 238, .25);
+    border-radius: 999px;
+    background: rgba(34, 211, 238, .07);
+    color: var(--cyan);
+    font-size: 9.5px;
+    cursor: pointer;
+  }
+  .token-help-inline:hover { color: #8befff; border-color: rgba(34, 211, 238, .5); }
 
   /* ---------- Lyrics panel ---------- */
   .lyrics-panel {
@@ -1061,6 +1072,23 @@
   .modal-status { min-height: 16px; margin-top: 10px; font-size: 10.5px; color: var(--muted-2); }
   .modal-status.ok { color: var(--green); }
   .modal-status.err { color: var(--red); }
+  .token-help-steps {
+    margin: 0;
+    padding: 0 0 0 18px;
+    color: #a9c8d6;
+    font-size: 11px;
+    line-height: 1.55;
+  }
+  .token-help-steps li { margin: 7px 0; padding-left: 2px; }
+  .token-help-steps li::marker { color: var(--cyan); font-weight: 700; }
+  .token-help-note {
+    margin-top: 14px;
+    padding-left: 9px;
+    border-left: 2px solid rgba(255, 204, 0, .5);
+    color: #8fb2c2;
+    font-size: 10.5px;
+    line-height: 1.55;
+  }
   @media (max-width: 980px) {
     .oauth-settings { grid-template-columns: 1fr; }
     .oauth-row { flex-wrap: wrap; }
@@ -1787,7 +1815,7 @@
           <div class="side-tip-title">✦ Горячие клавиши</div>
           <p>Space — пауза · ← → — перемотка · ↑ ↓ — громкость · M — звук · S — перемешать · R — повтор · Ctrl+F — поиск</p>
         </div>
-        <div class="side-version">SONOR 1.9.1 · DESKTOP</div>
+        <div class="side-version">SONOR 1.9.2 · DESKTOP</div>
       </div>
     </aside>
 
@@ -2059,7 +2087,10 @@
                 <div class="card-desc">Аудиозаписи и плейлисты</div>
               </div>
             </div>
-            <div class="token-caption">Или вставьте токен вручную</div>
+            <div class="token-caption">
+              Или вставьте токен вручную
+              <button class="token-help-inline" type="button" data-token-help="vk">Где взять токен?</button>
+            </div>
             <div class="token-row">
               <input id="vk-token" type="password" placeholder="access_token" autocomplete="off" spellcheck="false">
               <button class="eye" data-eye="vk-token" title="Показать токен">◉</button>
@@ -2067,7 +2098,6 @@
             <div class="card-actions">
               <button class="btn primary" id="vk-import">Импортировать</button>
               <button class="btn small ghost" id="vk-check">Проверить</button>
-              <button class="card-help" data-external="https://dev.vk.com/ru/api/access-token/getting-started">Как получить →</button>
             </div>
             <div class="card-status" id="vk-status"></div>
             <div class="saved-note" id="vk-saved"></div>
@@ -2081,7 +2111,10 @@
                 <div class="card-desc">Плейлисты, любимое и альбомы</div>
               </div>
             </div>
-            <div class="token-caption">Или вставьте токен вручную</div>
+            <div class="token-caption">
+              Или вставьте токен вручную
+              <button class="token-help-inline" type="button" data-token-help="yandex">Где взять токен?</button>
+            </div>
             <div class="token-row">
               <input id="ya-token" type="password" placeholder="OAuth-токен" autocomplete="off" spellcheck="false">
               <button class="eye" data-eye="ya-token" title="Показать токен">◉</button>
@@ -2089,7 +2122,6 @@
             <div class="card-actions">
               <button class="btn primary" id="ya-import">Импортировать</button>
               <button class="btn small ghost" id="ya-check">Проверить</button>
-              <button class="card-help" data-external="https://yandex.ru/dev/id/doc/ru/tokens/debug-token">Как получить →</button>
             </div>
             <div class="card-status" id="ya-status"></div>
             <div class="saved-note" id="ya-saved"></div>
@@ -2103,7 +2135,10 @@
                 <div class="card-desc">Плейлисты и треки</div>
               </div>
             </div>
-            <div class="token-caption">Или вставьте токен вручную</div>
+            <div class="token-caption">
+              Или вставьте токен вручную
+              <button class="token-help-inline" type="button" data-token-help="spotify">Где взять токен?</button>
+            </div>
             <div class="token-row">
               <input id="sp-token" type="password" placeholder="access_token" autocomplete="off" spellcheck="false">
               <button class="eye" data-eye="sp-token" title="Показать токен">◉</button>
@@ -2111,7 +2146,6 @@
             <div class="card-actions">
               <button class="btn primary" id="sp-import">Импортировать</button>
               <button class="btn small ghost" id="sp-check">Проверить</button>
-              <button class="card-help" data-external="https://developer.spotify.com/documentation/web-api/concepts/access-token">Как получить →</button>
             </div>
             <div class="card-status" id="sp-status"></div>
             <div class="saved-note" id="sp-saved"></div>
@@ -2236,6 +2270,26 @@
       <button class="btn ghost" type="button" id="oauth-device-cancel">Отмена</button>
     </div>
     <div class="modal-status" id="oauth-device-status"></div>
+  </div>
+</div>
+
+<div class="modal" id="token-help-modal" hidden>
+  <div class="modal-backdrop" data-token-help-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="token-help-title">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="token-help-title">Где взять токен</div>
+        <div class="modal-text" id="token-help-intro"></div>
+      </div>
+      <button class="modal-close" type="button" data-token-help-close aria-label="Закрыть">✕</button>
+    </div>
+    <ol class="token-help-steps" id="token-help-steps"></ol>
+    <div class="token-help-note" id="token-help-note"></div>
+    <div class="modal-url" id="token-help-url"></div>
+    <div class="modal-actions">
+      <button class="btn primary" type="button" id="token-help-open">Открыть сайт</button>
+      <button class="btn ghost" type="button" data-token-help-close>Понятно</button>
+    </div>
   </div>
 </div>
 
@@ -4375,6 +4429,72 @@
     }
   }
 
+  var TOKEN_HELP = {
+    vk: {
+      title: "Где взять токен VK",
+      intro: "VK выдаёт токен приложению. Пароль от аккаунта вводить в Sonor не нужно.",
+      steps: [
+        "Откройте VK для разработчиков и создайте Standalone-приложение.",
+        "В настройках приложения включите доступ «Аудиозаписи» (audio).",
+        "Сгенерируйте токен в разделе OAuth или нажмите «Войти» в блоке OAuth выше — Sonor получит токен сам.",
+        "Скопируйте access_token и вставьте его в поле VK Музыки."
+      ],
+      note: "Токен даёт доступ к аккаунту — не публикуйте его. VK может ограничивать аудио для сторонних приложений.",
+      url: "https://dev.vk.com/ru/admin/apps",
+      urlLabel: "Открыть VK для разработчиков"
+    },
+    yandex: {
+      title: "Где взять токен Яндекса",
+      intro: "Удобнее всего войти через Яндекс выше: Sonor сам получит токен по Device Flow.",
+      steps: [
+        "Нажмите «Войти» в блоке «Безопасный вход через OAuth».",
+        "Введите код на oauth.yandex.ru/device и подтвердите доступ.",
+        "Для ручного токена создайте приложение на oauth.yandex.ru с доступом к Яндекс Музыке.",
+        "Получите OAuth-токен и вставьте его в поле «Яндекс Музыка»."
+      ],
+      note: "Пароль вводится только на сайте Яндекса. API Яндекс Музыки неофициальный: токен может не дать доступ ко всей медиатеке.",
+      url: "https://oauth.yandex.ru/",
+      urlLabel: "Открыть Яндекс OAuth"
+    },
+    spotify: {
+      title: "Где взять токен Spotify",
+      intro: "Удобнее всего войти через Spotify выше: Sonor использует PKCE и не хранит пароль.",
+      steps: [
+        "Откройте Spotify Developer Dashboard и создайте приложение.",
+        "Добавьте Redirect URI http://127.0.0.1:53682/callback.",
+        "Скопируйте Client ID в настройки OAuth выше.",
+        "Для ручного токена получите access token через Spotify Web API и вставьте его ниже."
+      ],
+      note: "Ручной токен Spotify живёт около часа. Приложение может отдавать 30-секундные превью; доступ зависит от региона и квот.",
+      url: "https://developer.spotify.com/dashboard",
+      urlLabel: "Открыть Spotify Dashboard"
+    }
+  };
+  var tokenHelpUrl = "";
+
+  function openTokenHelp(service) {
+    var info = TOKEN_HELP[service];
+    if (!info) return;
+    tokenHelpUrl = info.url;
+    $("token-help-title").textContent = info.title;
+    $("token-help-intro").textContent = info.intro;
+    $("token-help-note").textContent = info.note;
+    $("token-help-url").textContent = info.url;
+    $("token-help-open").textContent = info.urlLabel;
+    var list = $("token-help-steps");
+    list.innerHTML = "";
+    info.steps.forEach(function (step) {
+      var item = document.createElement("li");
+      item.textContent = step;
+      list.appendChild(item);
+    });
+    $("token-help-modal").hidden = false;
+  }
+
+  function closeTokenHelp() {
+    $("token-help-modal").hidden = true;
+  }
+
   function oauthLogout(service) {
     if (!ipc) return;
     var prefix = oauthPrefix(service);
@@ -4691,6 +4811,22 @@
       if (ipc) ipc.invoke("open-external", url);
       else window.open(url, "_blank", "noopener");
     });
+  });
+
+  document.querySelectorAll("[data-token-help]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      openTokenHelp(btn.dataset.tokenHelp);
+    });
+  });
+
+  document.querySelectorAll("[data-token-help-close]").forEach(function (btn) {
+    btn.addEventListener("click", closeTokenHelp);
+  });
+
+  $("token-help-open").addEventListener("click", function () {
+    if (!tokenHelpUrl) return;
+    if (ipc) ipc.invoke("open-external", tokenHelpUrl);
+    else window.open(tokenHelpUrl, "_blank", "noopener");
   });
 
   $("free-search").addEventListener("click", searchFree);

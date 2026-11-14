@@ -9,7 +9,8 @@ import {
   Alert,
   TextInput,
   Linking,
-  Modal
+  Modal,
+  ScrollView
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -35,6 +36,48 @@ const SERVICES = {
   vk: { name: 'VK Music', colors: ['#4facfe', '#00f2fe'] },
   yandex: { name: 'Яндекс Музыка', colors: ['#00b4d8', '#0077b6'] },
   spotify: { name: 'Spotify', colors: ['#1db954', '#1ed760'] }
+};
+
+const TOKEN_HELP = {
+  vk: {
+    title: 'Где взять токен VK',
+    intro: 'VK выдаёт токен приложению. Пароль от аккаунта вводить в Sonor не нужно.',
+    steps: [
+      'Откройте VK для разработчиков и создайте Standalone-приложение.',
+      'В настройках приложения включите доступ «Аудиозаписи» (audio).',
+      'Сгенерируйте токен в разделе OAuth или нажмите «Войти» в блоке OAuth выше — Sonor получит токен сам.',
+      'Скопируйте access_token и вставьте его в поле VK Music.'
+    ],
+    note: 'Токен даёт доступ к аккаунту — не публикуйте его. VK может ограничивать аудио для сторонних приложений.',
+    url: 'https://dev.vk.com/ru/admin/apps',
+    urlLabel: 'Открыть VK для разработчиков'
+  },
+  yandex: {
+    title: 'Где взять токен Яндекса',
+    intro: 'Удобнее всего войти через Яндекс выше: Sonor сам получит токен по Device Flow.',
+    steps: [
+      'Нажмите «Войти через Яндекс» в блоке OAuth выше.',
+      'Введите код на oauth.yandex.ru/device и подтвердите доступ.',
+      'Для ручного токена создайте приложение на oauth.yandex.ru с доступом к Яндекс Музыке.',
+      'Получите OAuth-токен и вставьте его в поле «Яндекс Музыка».'
+    ],
+    note: 'Пароль вводится только на сайте Яндекса. API Яндекс Музыки неофициальный: токен может не дать доступ ко всей медиатеке.',
+    url: 'https://oauth.yandex.ru/',
+    urlLabel: 'Открыть Яндекс OAuth'
+  },
+  spotify: {
+    title: 'Где взять токен Spotify',
+    intro: 'Удобнее всего войти через Spotify выше: Sonor использует PKCE и не хранит пароль.',
+    steps: [
+      'Откройте Spotify Developer Dashboard и создайте приложение.',
+      'Добавьте Redirect URI http://127.0.0.1:53682/callback.',
+      'Скопируйте Client ID в настройки OAuth выше.',
+      'Для ручного токена получите access token через Spotify Web API и вставьте его ниже.'
+    ],
+    note: 'Ручной токен Spotify живёт около часа. Приложение может отдавать 30-секундные превью; доступ зависит от региона и квот.',
+    url: 'https://developer.spotify.com/dashboard',
+    urlLabel: 'Открыть Spotify Dashboard'
+  }
 };
 
 const MusicImporter = ({
@@ -64,6 +107,7 @@ const MusicImporter = ({
   const [oauthBusy, setOauthBusy] = useState(false);
   const [oauthConnected, setOauthConnected] = useState(false);
   const [oauthModalOpen, setOauthModalOpen] = useState(false);
+  const [tokenHelpService, setTokenHelpService] = useState(null);
   const [oauthCode, setOauthCode] = useState('');
   const [oauthUrl, setOauthUrl] = useState(YANDEX_DEVICE_URL);
   const [oauthStatus, setOauthStatus] = useState('');
@@ -196,6 +240,14 @@ const MusicImporter = ({
       await Linking.openURL(url || YANDEX_DEVICE_URL);
     } catch (error) {
       Alert.alert('Не удалось открыть браузер', 'Откройте oauth.yandex.ru/device вручную.');
+    }
+  };
+
+  const openTokenHelpUrl = async (url) => {
+    try {
+      await Linking.openURL(url);
+    } catch (error) {
+      Alert.alert('Не удалось открыть браузер', url);
     }
   };
 
@@ -382,6 +434,8 @@ const MusicImporter = ({
     }
   };
 
+  const activeTokenHelp = tokenHelpService ? TOKEN_HELP[tokenHelpService] : null;
+
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
@@ -507,17 +561,27 @@ const MusicImporter = ({
           {Object.keys(SERVICES).map((service) => {
             const saved = savedServices.indexOf(service) !== -1;
             return (
-              <TextInput
-                key={service}
-                style={styles.tokenInput}
-                placeholder={saved ? `${SERVICES[service].name}: токен сохранён` : `${SERVICES[service].name} Token`}
-                placeholderTextColor="#6f95a6"
-                value={tokens[service]}
-                onChangeText={(value) => setTokens({ ...tokens, [service]: value })}
-                autoCapitalize="none"
-                autoCorrect={false}
-                secureTextEntry
-              />
+              <View key={service} style={styles.tokenField}>
+                <View style={styles.tokenLabelRow}>
+                  <Text style={styles.tokenServiceName}>{SERVICES[service].name}</Text>
+                  <TouchableOpacity
+                    onPress={() => setTokenHelpService(service)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.tokenHelpButton}>Где взять токен?</Text>
+                  </TouchableOpacity>
+                </View>
+                <TextInput
+                  style={styles.tokenInput}
+                  placeholder={saved ? `${SERVICES[service].name}: токен сохранён` : `${SERVICES[service].name} Token`}
+                  placeholderTextColor="#6f95a6"
+                  value={tokens[service]}
+                  onChangeText={(value) => setTokens({ ...tokens, [service]: value })}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                />
+              </View>
             );
           })}
 
@@ -673,6 +737,54 @@ const MusicImporter = ({
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={!!activeTokenHelp}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTokenHelpService(null)}
+      >
+        <View style={styles.oauthModalBackdrop}>
+          <View style={[styles.oauthModalCard, styles.tokenHelpCard]}>
+            {activeTokenHelp && (
+              <ScrollView
+                style={styles.tokenHelpScroll}
+                contentContainerStyle={styles.tokenHelpContent}
+                showsVerticalScrollIndicator={false}
+              >
+                <Text style={styles.oauthModalTitle}>{activeTokenHelp.title}</Text>
+                <Text style={styles.oauthModalText}>{activeTokenHelp.intro}</Text>
+
+                {activeTokenHelp.steps.map((step, index) => (
+                  <View key={`${tokenHelpService}-${index}`} style={styles.tokenHelpStep}>
+                    <Text style={styles.tokenHelpNumber}>{index + 1}</Text>
+                    <Text style={styles.tokenHelpStepText}>{step}</Text>
+                  </View>
+                ))}
+
+                <Text style={styles.tokenHelpNote}>{activeTokenHelp.note}</Text>
+
+                <TouchableOpacity
+                  style={styles.tokenHelpOpen}
+                  onPress={() => openTokenHelpUrl(activeTokenHelp.url)}
+                  activeOpacity={0.82}
+                >
+                  <Text style={styles.tokenHelpOpenText}>{activeTokenHelp.urlLabel}</Text>
+                </TouchableOpacity>
+                <Text selectable style={styles.oauthModalUrl}>{activeTokenHelp.url}</Text>
+
+                <TouchableOpacity
+                  style={styles.oauthModalCancel}
+                  onPress={() => setTokenHelpService(null)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.oauthModalCancelText}>Понятно</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -801,7 +913,61 @@ const styles = StyleSheet.create({
   oauthModalStatus: { color: '#9bb6c2', fontSize: 10.5, lineHeight: 15, marginTop: 12 },
   oauthModalCancel: { alignSelf: 'center', padding: 10, marginTop: 2 },
   oauthModalCancelText: { color: '#ff8b8b', fontSize: 11, fontWeight: '700' },
-  tokenInputs: { gap: 10, marginBottom: 15 },
+  tokenInputs: { gap: 12, marginBottom: 15 },
+  tokenField: { gap: 6 },
+  tokenLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8
+  },
+  tokenServiceName: { color: '#a9c8d6', fontSize: 11, fontWeight: '700' },
+  tokenHelpButton: {
+    color: '#22d3ee',
+    fontSize: 10,
+    fontWeight: '700',
+    paddingVertical: 3,
+    paddingHorizontal: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 211, 238, 0.28)',
+    backgroundColor: 'rgba(34, 211, 238, 0.08)',
+    overflow: 'hidden'
+  },
+  tokenHelpCard: { maxHeight: '82%' },
+  tokenHelpScroll: { maxHeight: '100%' },
+  tokenHelpContent: { paddingBottom: 2 },
+  tokenHelpStep: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  tokenHelpNumber: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(34, 211, 238, 0.16)',
+    color: '#22d3ee',
+    fontSize: 10,
+    fontWeight: '900',
+    textAlign: 'center',
+    lineHeight: 18,
+    overflow: 'hidden'
+  },
+  tokenHelpStepText: { flex: 1, color: '#a9c8d6', fontSize: 11, lineHeight: 16 },
+  tokenHelpNote: {
+    marginTop: 14,
+    color: '#8fb2c2',
+    fontSize: 10.5,
+    lineHeight: 15,
+    borderLeftWidth: 2,
+    borderLeftColor: 'rgba(255, 204, 0, 0.5)',
+    paddingLeft: 8
+  },
+  tokenHelpOpen: {
+    marginTop: 14,
+    paddingVertical: 11,
+    borderRadius: 10,
+    backgroundColor: '#22d3ee',
+    alignItems: 'center'
+  },
+  tokenHelpOpenText: { color: '#04161c', fontSize: 12, fontWeight: '900' },
   tokenInput: {
     backgroundColor: 'rgba(0, 0, 0, 0.24)',
     borderRadius: 10,
