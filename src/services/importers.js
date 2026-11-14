@@ -876,8 +876,8 @@ async function importSpotifyFull(token, builder) {
     const saved = await spotifyPaged(SPOTIFY_API + '/me/albums?limit=50', token);
     const albums = saved
       .map(function (entry) { return entry && entry.album; })
-      .filter(function (a) { return a && a.id; });
-    if (albums.length > 500) albums = albums.slice(0, 500);
+      .filter(function (a) { return a && a.id; })
+      .slice(0, 500);
 
     const albumResults = await mapLimit(albums, CONCURRENCY, async function (album) {
       const entries = await spotifyPaged(

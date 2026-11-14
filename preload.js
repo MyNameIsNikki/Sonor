@@ -44,8 +44,18 @@ const RECEIVE_CHANNELS = new Set([
 function pathToFileURL(filePath) {
   if (!filePath) return null;
   let normalized = String(filePath).replace(/\\/g, '/');
-  if (!normalized.startsWith('/')) normalized = '/' + normalized;
-  return 'file://' + normalized
+  // Windows может отдать extended-length путь: \\?\C:\Music или
+  // \\?\UNC\server\share. Убираем префикс, иначе '?' попадёт в URL.
+  if (normalized.startsWith('//?/UNC/')) {
+    normalized = '//' + normalized.slice(8);
+  } else if (normalized.startsWith('//?/')) {
+    normalized = normalized.slice(4);
+  }
+  // Сетевой путь \\server\share должен превращаться в file://server/share,
+  // а не в file:////server/share с пустым хостом.
+  const isUnc = normalized.startsWith('//');
+  if (!isUnc && !normalized.startsWith('/')) normalized = '/' + normalized;
+  const encoded = normalized
     .split('/')
     .map(function (segment) {
       if (segment === '') return '';
@@ -53,6 +63,7 @@ function pathToFileURL(filePath) {
       return encodeURIComponent(segment).replace(/%3A/gi, ':');
     })
     .join('/');
+  return isUnc ? 'file:' + encoded : 'file://' + encoded;
 }
 
 contextBridge.exposeInMainWorld('sonor', {

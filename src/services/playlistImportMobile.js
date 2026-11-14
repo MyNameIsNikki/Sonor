@@ -360,6 +360,7 @@ export async function pickPlaylistFiles() {
   const tracks = [];
   const collections = [];
   const warnings = [];
+  const seen = new Set();
   let skipped = 0;
   for (const asset of assets) {
     try {
@@ -370,9 +371,21 @@ export async function pickPlaylistFiles() {
       }
       const content = await FileSystem.readAsStringAsync(asset.uri);
       const parsed = parsePlaylistText(content, asset.name);
-      tracks.push(...parsed.tracks);
-      collections.push(parsed.collection);
-      skipped += parsed.skipped;
+      const addedTracks = parsed.tracks.filter((track) => {
+        if (!track || seen.has(track.id)) return false;
+        seen.add(track.id);
+        return true;
+      });
+      if (!addedTracks.length) continue;
+
+      const addedIds = new Set(addedTracks.map((track) => track.id));
+      const collection = {
+        ...parsed.collection,
+        trackIds: (parsed.collection.trackIds || []).filter((id) => addedIds.has(id))
+      };
+      tracks.push(...addedTracks);
+      if (collection.trackIds.length) collections.push(collection);
+      skipped += parsed.skipped + (parsed.tracks.length - addedTracks.length);
       warnings.push(...parsed.warnings);
     } catch (error) {
       warnings.push(`${asset.name || 'Файл'}: ${error.message}`);

@@ -37,11 +37,18 @@ const PlayerControls = ({
     }).start();
   }, [fadeAnim]);
 
-  const total = duration || track?.duration || 0;
-  const progress = total > 0 ? Math.min(100, (position / total) * 100) : 0;
+  const numericDuration = Number(duration);
+  const trackDuration = Number(track?.duration);
+  const total = Number.isFinite(numericDuration) && numericDuration > 0
+    ? numericDuration
+    : (Number.isFinite(trackDuration) && trackDuration > 0 ? trackDuration : 0);
+  const numericPosition = Number(position);
+  const safePosition = Number.isFinite(numericPosition) ? Math.max(0, numericPosition) : 0;
+  const boundedPosition = total > 0 ? Math.min(safePosition, total) : 0;
+  const progress = total > 0 ? Math.min(100, Math.max(0, (boundedPosition / total) * 100)) : 0;
 
   const formatTime = (milliseconds) => {
-    const totalSeconds = Math.max(0, Math.floor((milliseconds || 0) / 1000));
+    const totalSeconds = Math.max(0, Math.floor((Number(milliseconds) || 0) / 1000));
     const mins = Math.floor(totalSeconds / 60);
     const secs = totalSeconds % 60;
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
@@ -49,9 +56,15 @@ const PlayerControls = ({
 
   const handleSeek = (event) => {
     if (!onSeek || !total || !barWidth.current) return;
-    const x = event && event.nativeEvent ? event.nativeEvent.locationX : 0;
-    const ratio = Math.max(0, Math.min(1, x / barWidth.current));
+    const location = event && event.nativeEvent ? Number(event.nativeEvent.locationX) : NaN;
+    if (!Number.isFinite(location)) return;
+    const ratio = Math.max(0, Math.min(1, location / barWidth.current));
     onSeek(Math.round(ratio * total));
+  };
+
+  const seekBy = (delta) => {
+    if (!onSeek || !total) return;
+    onSeek(Math.max(0, Math.min(total, Math.round(boundedPosition + delta))));
   };
 
   return (
@@ -86,6 +99,7 @@ const PlayerControls = ({
           activeOpacity={0.82}
           accessibilityRole="button"
           accessibilityLabel="Текст песни"
+          accessibilityState={{ selected: !!lyricsOpen }}
         >
           <Text style={[styles.lyricsBtnText, lyricsOpen && styles.lyricsBtnTextActive]}>Aa</Text>
         </TouchableOpacity>
@@ -101,23 +115,49 @@ const PlayerControls = ({
           hitSlop={10}
           accessibilityRole="adjustable"
           accessibilityLabel="Позиция трека"
+          accessibilityValue={{
+            min: 0,
+            max: Math.round(total),
+            now: Math.round(boundedPosition),
+            text: `${formatTime(boundedPosition)} из ${formatTime(total)}`
+          }}
+          accessibilityActions={[
+            { name: 'increment', label: 'Вперёд на 10 секунд' },
+            { name: 'decrement', label: 'Назад на 10 секунд' }
+          ]}
+          onAccessibilityAction={(event) => {
+            if (event.nativeEvent.actionName === 'increment') seekBy(10000);
+            else if (event.nativeEvent.actionName === 'decrement') seekBy(-10000);
+          }}
         >
           <View style={styles.progressBarBg}>
             <View style={[styles.progressFill, { width: `${progress}%` }]} />
           </View>
         </Pressable>
         <View style={styles.timeContainer}>
-          <Text style={styles.timeText}>{formatTime(position)}</Text>
+          <Text style={styles.timeText}>{formatTime(boundedPosition)}</Text>
           <Text style={styles.timeText}>{formatTime(total)}</Text>
         </View>
       </View>
 
       <View style={styles.controlsContainer}>
-        <TouchableOpacity style={styles.controlBtn} onPress={onPrevious}>
+        <TouchableOpacity
+          style={styles.controlBtn}
+          onPress={onPrevious}
+          accessibilityRole="button"
+          accessibilityLabel="Предыдущий трек"
+        >
           <Text style={styles.controlIcon}>⏮</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.playBtn} onPress={onToggle} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={styles.playBtn}
+          onPress={onToggle}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={isPlaying ? 'Пауза' : 'Воспроизвести'}
+          accessibilityState={{ selected: isPlaying }}
+        >
           <LinearGradient colors={['#22d3ee', '#06b6d4']} style={styles.playGradient}>
             <Text style={isPlaying ? styles.pauseIcon : styles.playIcon}>
               {isPlaying ? '⏸' : '▶'}
@@ -125,7 +165,12 @@ const PlayerControls = ({
           </LinearGradient>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.controlBtn} onPress={onNext}>
+        <TouchableOpacity
+          style={styles.controlBtn}
+          onPress={onNext}
+          accessibilityRole="button"
+          accessibilityLabel="Следующий трек"
+        >
           <Text style={styles.controlIcon}>⏭</Text>
         </TouchableOpacity>
       </View>

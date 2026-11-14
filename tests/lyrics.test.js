@@ -88,6 +88,29 @@ test('normalizeQuery очищает название и создаёт вари�
   assert.ok(query.titleVariants.indexOf('Песня') !== -1);
 });
 
+test('normalizeQuery считает ровно 1000 мс одной секундой', () => {
+  assert.strictEqual(normalizeQuery({ title: 'Короткая', duration: 1000 }).duration, 1);
+  assert.strictEqual(normalizeQuery({ title: 'Длинная', duration: 215000 }).duration, 215);
+});
+
+test('pickBestCandidate не выбирает чужой текст без совпадения названия', () => {
+  const query = normalizeQuery({ title: 'Песня', artist: 'Артист', duration: 215 });
+  const best = pickBestCandidate([
+    { trackName: 'Совсем другая', artistName: 'Кто-то', duration: 120, plainLyrics: 'Чужой текст' },
+    { trackName: 'Песня', artistName: 'Артист', duration: 215, syncedLyrics: '[00:01.00]Нужный текст' }
+  ], query);
+
+  assert.ok(best);
+  assert.strictEqual(best.trackName, 'Песня');
+
+  assert.strictEqual(
+    pickBestCandidate([
+      { trackName: 'Совсем другая', artistName: 'Кто-то', duration: 120, plainLyrics: 'Чужой текст' }
+    ], query),
+    null
+  );
+});
+
 test('pickBestCandidate предпочитает синхронизацию и близкую длительность', () => {
   const query = normalizeQuery({ title: 'Песня', artist: 'Артист', duration: 215 });
   const best = pickBestCandidate([
@@ -101,7 +124,7 @@ test('pickBestCandidate предпочитает синхронизацию и �
 
 test('stripTimestamps убирает служебные метки', () => {
   assert.strictEqual(
-    stripTimestamps('[00:01.00]Раз\n[00:02.50]Два'),
+    stripTimestamps('[ar:Артист]\n[00:01.00]Раз\n[00:02.50]Два'),
     'Раз\nДва'
   );
 });

@@ -1787,7 +1787,7 @@
           <div class="side-tip-title">✦ Горячие клавиши</div>
           <p>Space — пауза · ← → — перемотка · ↑ ↓ — громкость · M — звук · S — перемешать · R — повтор · Ctrl+F — поиск</p>
         </div>
-        <div class="side-version">SONOR 1.8.0 · DESKTOP</div>
+        <div class="side-version">SONOR 1.8.1 · DESKTOP</div>
       </div>
     </aside>
 
@@ -2314,6 +2314,9 @@
   var saveTimer = null;
   var searchTimer = null;
   var playRequest = 0;
+  var libraryLoaded = false;
+  var libraryLoadFailed = false;
+  var savePending = false;
   var importStatus = {};
   var freeTracks = [];
   var freeSource = "all";
@@ -2334,7 +2337,7 @@
   };
   var shuffleOn = store.get("shuffle", false) === true;
   var repeatMode = ["off", "all", "one"].indexOf(store.get("repeat", "all")) !== -1 ? store.get("repeat", "all") : "all";
-  var sortMode = ["default", "title", "artist", "duration"].indexOf(store.get("sort", "default")) !== -1 ? store.get("sort", "default") : "default";
+  var sortMode = ["default", "title", "artist", "duration", "plays", "recent"].indexOf(store.get("sort", "default")) !== -1 ? store.get("sort", "default") : "default";
   var lastVolume = Math.min(1, Math.max(0, Number(store.get("volume", 0.8)) || 0.8));
   var muted = store.get("muted", false) === true;
 
@@ -2485,12 +2488,18 @@
 
   function scheduleSave() {
     if (!ipc) return;
+    // Пока библиотека не прочитана, автосохранение может затереть диск
+    // пустым списком. Откладываем запись до успешной загрузки.
+    if (!libraryLoaded) {
+      savePending = true;
+      return;
+    }
     clearTimeout(saveTimer);
     saveTimer = setTimeout(flushSave, 400);
   }
 
   function flushSave() {
-    if (!ipc) return;
+    if (!ipc || !libraryLoaded) return;
     clearTimeout(saveTimer);
     var payloadTracks = tracks
       .filter(function (t) { return t.source !== "local" || t.path; })
@@ -2519,34 +2528,55 @@
 
   function loadLibrary() {
     if (!ipc) return Promise.resolve();
+    libraryLoadFailed = false;
     return ipc.invoke("load-library")
       .then(function (data) {
-        if (!data) return;
-        var known = {};
-        tracks.forEach(function (t) { known[t.id] = true; });
-        (data.tracks || []).forEach(function (t) {
-          if (!t || !t.id || known[t.id]) return;
-          t.src = localFileUrl(t.path) || t.url || null;
-          known[t.id] = true;
-          tracks.push(t);
-        });
-        collections = Array.isArray(data.collections) ? data.collections : [];
-        if (data.stats && typeof data.stats === "object") {
-          stats = {
-            likes: data.stats.likes || {},
-            plays: data.stats.plays || {},
-            lastPlayed: data.stats.lastPlayed || {},
-            history: Array.isArray(data.stats.history) ? data.stats.history : []
-          };
+        if (data) {
+          var known = {};
+          tracks.forEach(function (t) { known[t.id] = true; });
+          (data.tracks || []).forEach(function (t) {
+            if (!t || !t.id || known[t.id]) return;
+            t.src = localFileUrl(t.path) || t.url || null;
+            known[t.id] = true;
+            tracks.push(t);
+          });
+          collections = Array.isArray(data.collections) ? data.collections : [];
+          if (data.stats && typeof data.stats === "object") {
+            stats = {
+              likes: data.stats.likes || {},
+              plays: data.stats.plays || {},
+              lastPlayed: data.stats.lastPlayed || {},
+              history: Array.isArray(data.stats.history) ? data.stats.history : []
+            };
+          }
         }
+
+        // С этого момента запись разрешена. Если пользователь успел что-то
+        // изменить до окончания загрузки, сохраняем уже объединённое состояние.
+        libraryLoaded = true;
+        if (savePending) {
+          savePending = false;
+          flushSave();
+        }
+
         renderAll();
         updateLikeUi();
-        if (data.tracks && data.tracks.length) {
+        if (data && data.tracks && data.tracks.length) {
           toast("Библиотека загружена: " + data.tracks.length + " " + plural(data.tracks.length, "трек", "трека", "треков"));
         }
         enrichLocalTags();
       })
-      .catch(function () { /* пустая библиотека */ });
+      .catch(function (err) {
+        libraryLoaded = false;
+        libraryLoadFailed = true;
+        savePending = false;
+        toast(
+          "Не удалось загрузить библиотеку: " +
+            (err && err.message ? err.message : "файл повреждён") +
+            ". Автосохранение отключено, чтобы не потерять данные.",
+          true
+        );
+      });
   }
 
   // ---------- Теги локальных файлов ----------
@@ -3037,8 +3067,19 @@
   function seekToLyric(seconds) {
     var value = Number(seconds);
     if (!isFinite(value) || value < 0) return;
-    audio.currentTime = value;
-    syncLyrics(true);
+    if (audio.readyState < 1) return;
+    try {
+      // Компенсируем задержку текста, чтобы нажатая строка стала текущей.
+      value += lyricsOffset / 1000;
+      value = Math.max(0, value);
+      if (isFinite(audio.duration) && audio.duration > 0) {
+        value = Math.min(value, audio.duration);
+      }
+      audio.currentTime = value;
+      syncLyrics(true);
+    } catch (err) {
+      console.warn("Не удалось перейти к строке текста:", err);
+    }
   }
 
   function renderLyrics() {
@@ -3123,7 +3164,7 @@
     var previous = lyricsActiveIndex;
     lyricsActiveIndex = next;
     var nodes = $("lyrics-body").querySelectorAll(".lyric-line");
-    if (previous >= 0 && nodes[previous]) nodes[previous].classList.remove("active");
+    for (var n = 0; n < nodes.length; n++) nodes[n].classList.remove("active");
 
     if (next >= 0 && nodes[next]) {
       nodes[next].classList.add("active");
@@ -3134,6 +3175,8 @@
       } else {
         scroller.scrollTop = Math.max(0, top);
       }
+    } else if (force || previous >= 0) {
+      $("lyrics-scroll").scrollTop = 0;
     }
   }
 
@@ -3172,7 +3215,8 @@
       title: t.title || "",
       artist: t.artist || "",
       album: t.album || "",
-      duration: t.duration || 0
+      // В библиотеке длительность хранится в секундах, а LRCLib ждёт мс.
+      duration: Math.round((t.duration || 0) * 1000)
     }).then(function (result) {
       if (request !== lyricsRequest || lyricsKey !== key) return;
       lyricsData = result && typeof result === "object" ? result : { found: false };
@@ -3246,6 +3290,12 @@
     current = tracks.indexOf(t);
     if (current < 0) return;
 
+    // Останавливаем предыдущий звук и отменяем его асинхронное получение
+    // ссылки до запуска нового запроса.
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+
     var request = ++playRequest;
     countedKey = null; // новый старт трека — посчитаем прослушивание
     updateNowPlaying();
@@ -3316,9 +3366,9 @@
   }
 
   function getQueue() {
-    if (activeCollectionId) return filtered;
-    if (($("search").value || "").trim()) return filtered;
-    return tracks;
+    // Очередь должна совпадать с тем, что видит пользователь: учитываем
+    // открытую коллекцию, поиск, избранное и выбранную сортировку.
+    return filtered;
   }
 
   function step(direction) {
@@ -3339,6 +3389,7 @@
 
     // Повтор выключен — на конце очереди останавливаемся
     if (repeatMode === "off" && nextIndex >= queue.length) {
+      playRequest++; // отменяем ещё не завершённое получение ссылки
       audio.pause();
       if (audio.duration) audio.currentTime = 0;
       setPlayIcon();
@@ -3360,6 +3411,7 @@
     if (index < 0) return;
 
     if (index === current) {
+      playRequest++;
       audio.pause();
       audio.removeAttribute("src");
       audio.load();
@@ -3410,6 +3462,7 @@
     var playlists = [];
     var pending = []; // файлы, ожидающие чтения тегов
     activeCollectionId = null;
+    likedOnly = false;
     $("search").value = "";
     visibleLimit = 300;
 
@@ -3438,7 +3491,7 @@
       updateLikeUi();
       scheduleSave();
       toast("Добавлено треков: " + ready.length);
-      if (current === -1 && tracks.length) playTrack(tracks[0]);
+      if (current === -1 && ready.length) playTrack(ready[0]);
     }
 
     if (!canReadTags) {
@@ -3883,7 +3936,13 @@
       activeCollectionId = null;
       likedOnly = false;
     }
-    if (name === "liked") likedOnly = true;
+    if (name === "liked") {
+      // «Любимое» показывает всю библиотеку, а не открытую ранее коллекцию.
+      activeCollectionId = null;
+      $("search").value = "";
+      visibleLimit = 300;
+      likedOnly = true;
+    }
     if (name === "library") likedOnly = false;
     if (name === "playlists" || name === "albums") renderCollections();
     if (name === "library" || name === "liked") render();
@@ -3961,6 +4020,7 @@
     var playingService = tracks[current] && tracks[current].source === service;
 
     if (playingService) {
+      playRequest++;
       audio.pause();
       audio.removeAttribute("src");
       audio.load();
@@ -4471,17 +4531,77 @@
 
     ipc.invoke("import-link", { url: url })
       .then(function (result) {
-        var ids = (result.collections || []).map(function (c) { return c.id; });
+        var linkCollections = result.collections || [];
+        var ids = linkCollections.map(function (c) { return c.id; }).filter(Boolean);
+        var currentTrack = tracks[current] || null;
+        var incoming = [];
+        var incomingById = Object.create(null);
+
+        (result.tracks || []).forEach(function (t) {
+          if (!t || !t.id || incomingById[t.id]) return;
+          incomingById[t.id] = true;
+          incoming.push(t);
+        });
+
+        // Текущий трек исчезнет вместе со старой коллекцией — его нельзя
+        // оставлять играть, иначе current начнёт указывать на чужой трек.
+        var replacesCurrent = !!(
+          currentTrack &&
+          currentTrack.source === "link" &&
+          ((currentTrack.origin && ids.indexOf(currentTrack.origin) !== -1) ||
+            incomingById[currentTrack.id])
+        );
+
         tracks = tracks.filter(function (t) {
-          return !(t.source === "link" && ids.indexOf(t.origin) !== -1);
+          if (t.source !== "link") return true;
+          if (t.origin && ids.indexOf(t.origin) !== -1) return false;
+          return !incomingById[t.id];
         });
         collections = collections.filter(function (c) { return ids.indexOf(c.id) === -1; });
 
-        (result.tracks || []).forEach(function (t) {
-          t.src = t.url || null;
+        incoming.forEach(function (t) {
+          var existing = null;
+          for (var i = 0; i < tracks.length; i++) {
+            if (tracks[i].id === t.id) { existing = tracks[i]; break; }
+          }
+          if (existing) {
+            // Тот же трек уже есть в другой коллекции — обновляем его, а не
+            // добавляем второй экземпляр с тем же id.
+            if (t.title) existing.title = t.title;
+            if (t.artist) existing.artist = t.artist;
+            if (t.album) existing.album = t.album;
+            if (t.duration) existing.duration = t.duration;
+            if (t.image) existing.image = t.image;
+            if (t.url) {
+              existing.url = t.url;
+              existing.src = t.url;
+            } else if (!existing.src) {
+              existing.src = existing.url || null;
+            }
+            return;
+          }
+          t.src = t.url || t.src || null;
           tracks.push(t);
         });
-        (result.collections || []).forEach(function (c) { collections.push(c); });
+
+        var seenCollections = Object.create(null);
+        linkCollections.forEach(function (c) {
+          if (!c || !c.id || seenCollections[c.id]) return;
+          seenCollections[c.id] = true;
+          collections.push(c);
+        });
+
+        if (replacesCurrent) {
+          playRequest++;
+          audio.pause();
+          audio.removeAttribute("src");
+          audio.load();
+          current = -1;
+          updateNowPlaying();
+        } else {
+          current = currentTrack ? tracks.indexOf(currentTrack) : -1;
+          if (current < 0) current = -1;
+        }
 
         renderAll();
         scheduleSave();
@@ -4501,7 +4621,7 @@
   }
 
   if (ipc) {
-    ipc.on("import-progress", function (event, progress) {
+    ipc.on("import-progress", function (progress) {
       if (!progress || !progress.service) return;
       var statusId = importStatus[progress.service];
       if (!statusId) return;
@@ -4564,9 +4684,10 @@
   });
 
   document.querySelectorAll("[data-external]").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var url = btn.dataset.external;
+    btn.addEventListener("click", function (event) {
+      var url = btn.dataset.external || btn.getAttribute("href");
       if (!url) return;
+      event.preventDefault();
       if (ipc) ipc.invoke("open-external", url);
       else window.open(url, "_blank", "noopener");
     });
@@ -4600,6 +4721,7 @@
       if (!audio.src) playTrack(tracks[current]);
       else audio.play().catch(function () { /* обработано в error */ });
     } else {
+      playRequest++;
       audio.pause();
     }
     updateNowPlaying();
@@ -4732,6 +4854,7 @@
     } else {
       errorSkips = 0;
       toast("Несколько треков подряд недоступны. Воспроизведение остановлено.", true);
+      playRequest++;
       audio.pause();
       audio.removeAttribute("src");
       audio.load();
@@ -4753,7 +4876,10 @@
         if (!audio.src) playTrack(tracks[current]);
         else audio.play().catch(function () { /* ignore */ });
       });
-      navigator.mediaSession.setActionHandler("pause", function () { audio.pause(); });
+      navigator.mediaSession.setActionHandler("pause", function () {
+        playRequest++;
+        audio.pause();
+      });
       navigator.mediaSession.setActionHandler("previoustrack", function () {
         if (audio.currentTime > 3) { audio.currentTime = 0; return; }
         step(-1);
@@ -4831,6 +4957,7 @@
   $("hero-play").addEventListener("click", function () {
     if (!filtered.length) return;
     if (tracks[current] && filtered.indexOf(tracks[current]) !== -1 && !audio.paused) {
+      playRequest++;
       audio.pause();
       updateNowPlaying();
       return;
@@ -4974,7 +5101,7 @@
     .then(function (services) {
       loadOAuthConfig();
       maybeShowWelcome();
-      if (services && services.length && !syncStarted) {
+      if (services && services.length && !syncStarted && !libraryLoadFailed) {
         syncStarted = true;
         syncSaved(false);
       }

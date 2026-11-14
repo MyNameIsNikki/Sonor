@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -46,7 +47,12 @@ const LyricsPanel = ({ visible, track, position = 0, onClose, onSeek }) => {
   }, []);
 
   useEffect(() => {
-    if (!visible || !track) return undefined;
+    if (!visible) return undefined;
+    if (!track) {
+      setLoading(false);
+      setResult(null);
+      return undefined;
+    }
 
     let alive = true;
     setLoading(true);
@@ -90,6 +96,7 @@ const LyricsPanel = ({ visible, track, position = 0, onClose, onSeek }) => {
   ]);
 
   const lines = (result && result.synced && Array.isArray(result.lines)) ? result.lines : [];
+  const canSync = lines.length > 0;
   const effectivePosition = position - offset;
   let activeIndex = -1;
   for (let i = 0; i < lines.length; i += 1) {
@@ -97,24 +104,38 @@ const LyricsPanel = ({ visible, track, position = 0, onClose, onSeek }) => {
     else break;
   }
 
+  const scrollToLine = (index, animated) => {
+    const y = linePositions.current[index];
+    if (typeof y !== 'number' || !scrollRef.current) return false;
+    scrollRef.current.scrollTo({ y: Math.max(0, y - 130), animated: animated !== false });
+    return true;
+  };
+
   useEffect(() => {
-    if (!visible || activeIndex < 0) return;
-    const y = linePositions.current[activeIndex];
-    if (typeof y !== 'number' || !scrollRef.current) return;
-    scrollRef.current.scrollTo({ y: Math.max(0, y - 130), animated: true });
+    if (!visible) return;
+    if (activeIndex < 0) {
+      if (scrollRef.current) scrollRef.current.scrollTo({ y: 0, animated: false });
+      return;
+    }
+    // При первом открытии разметка строк ещё может быть не готова.
+    // Повторный вызов будет из onLayout активной строки.
+    scrollToLine(activeIndex, true);
   }, [activeIndex, visible]);
 
   const changeOffset = (delta) => {
-    const next = clampOffset(offset + delta);
-    setOffset(next);
-    SecureStore.setItemAsync(OFFSET_KEY, String(next)).catch(() => {});
+    setOffset((current) => {
+      const next = clampOffset(current + delta);
+      SecureStore.setItemAsync(OFFSET_KEY, String(next)).catch(() => {});
+      return next;
+    });
   };
 
   const seekTo = (seconds) => {
     if (typeof onSeek !== 'function') return;
     const value = Number(seconds);
     if (!Number.isFinite(value) || value < 0) return;
-    onSeek(Math.round(value * 1000));
+    // Компенсируем задержку, иначе после тапа активной окажется другая строка.
+    onSeek(Math.round((value + offset / 1000) * 1000));
   };
 
   const retry = () => setRetryToken((value) => value + 1);
@@ -176,7 +197,9 @@ const LyricsPanel = ({ visible, track, position = 0, onClose, onSeek }) => {
               activeOpacity={0.75}
               onPress={() => seekTo(line.time)}
               onLayout={(event) => {
-                linePositions.current[index] = event.nativeEvent.layout.y;
+                const y = event.nativeEvent.layout.y;
+                linePositions.current[index] = y;
+                if (index === activeIndex) scrollToLine(index, false);
               }}
             >
               <Text
@@ -223,16 +246,28 @@ const LyricsPanel = ({ visible, track, position = 0, onClose, onSeek }) => {
           </View>
 
           <View style={styles.toolbar}>
-            <TouchableOpacity style={styles.offsetBtn} onPress={() => changeOffset(-500)} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={[styles.offsetBtn, !canSync && styles.offsetBtnDisabled]}
+              onPress={() => changeOffset(-500)}
+              disabled={!canSync}
+              activeOpacity={0.8}
+              accessibilityLabel="Уменьшить задержку текста на полсекунды"
+            >
               <Text style={styles.offsetBtnText}>−0,5 с</Text>
             </TouchableOpacity>
             <View style={styles.offsetCenter}>
               <Text style={styles.offsetLabel}>Задержка {offsetText(offset)}</Text>
               <Text style={styles.offsetHint}>
-                {result && result.synced ? 'СИНХРОНИЗАЦИЯ' : 'LRCLIB'}
+                {canSync ? 'СИНХРОНИЗАЦИЯ' : 'LRCLIB'}
               </Text>
             </View>
-            <TouchableOpacity style={styles.offsetBtn} onPress={() => changeOffset(500)} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={[styles.offsetBtn, !canSync && styles.offsetBtnDisabled]}
+              onPress={() => changeOffset(500)}
+              disabled={!canSync}
+              activeOpacity={0.8}
+              accessibilityLabel="Увеличить задержку текста на полсекунды"
+            >
               <Text style={styles.offsetBtnText}>+0,5 с</Text>
             </TouchableOpacity>
           </View>
@@ -242,6 +277,9 @@ const LyricsPanel = ({ visible, track, position = 0, onClose, onSeek }) => {
             style={styles.scroll}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
+            onContentSizeChange={() => {
+              if (activeIndex >= 0) scrollToLine(activeIndex, false);
+            }}
           >
             {renderBody()}
           </ScrollView>
@@ -336,6 +374,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(34, 211, 238, 0.22)',
     backgroundColor: 'rgba(34, 211, 238, 0.06)'
+  },
+  offsetBtnDisabled: {
+    opacity: 0.38
   },
   offsetBtnText: {
     color: '#22d3ee',
@@ -432,7 +473,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 20,
     paddingTop: 6,
-    paddingBottom: 20
+    paddingBottom: Platform.OS === 'ios' ? 30 : 20
   }
 });
 

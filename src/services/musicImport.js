@@ -809,23 +809,67 @@ function splitArtistTitle(value) {
   return { artist: 'Неизвестный исполнитель', title: source };
 }
 
-function nameFromUrl(value) {
+function fileNameFromUrl(value, fallback = 'Аудиопоток') {
+  const source = String(value || '').trim();
+  if (!source) return fallback;
+  let clean = source.split('#')[0].split('?')[0];
+  clean = clean.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+  const segments = clean.split('/').filter(Boolean);
+  let name = segments.length ? segments[segments.length - 1] : '';
+  if (!name) return fallback;
   try {
-    const parsed = new URL(value);
-    let name = parsed.pathname.split('/').filter(Boolean).pop() || parsed.hostname;
-    name = decodeURIComponent(name).replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[_+]+/g, ' ');
-    return splitArtistTitle(name);
+    name = decodeURIComponent(name);
   } catch (error) {
-    return { artist: 'Неизвестный исполнитель', title: 'Аудиопоток' };
+    // Оставляем имя как есть, если оно закодировано частично.
   }
+  name = name.replace(/\+/g, ' ').replace(/\.[a-z0-9]{2,5}$/i, '').trim();
+  return name || fallback;
 }
 
+function splitUrl(value) {
+  const input = String(value || '').trim();
+  const hashIndex = input.indexOf('#');
+  const withoutHash = hashIndex === -1 ? input : input.slice(0, hashIndex);
+  const hash = hashIndex === -1 ? '' : input.slice(hashIndex);
+  const queryIndex = withoutHash.indexOf('?');
+  return {
+    path: queryIndex === -1 ? withoutHash : withoutHash.slice(0, queryIndex),
+    suffix: (queryIndex === -1 ? '' : withoutHash.slice(queryIndex)) + hash
+  };
+}
+
+// React Native не имеет полноценного браузерного URL, поэтому разрешаем
+// относительные ссылки плейлистов вручную — без new URL.
 function resolveUrl(value, base) {
-  try {
-    return new URL(value, base).toString();
-  } catch (error) {
-    return null;
+  const input = String(value || '').trim();
+  if (!input) return null;
+
+  if (/^[a-z][a-z0-9+.-]*:/i.test(input)) {
+    return /^https?:\/\//i.test(input) ? input : null;
   }
+
+  const baseSource = String(base || '').trim();
+  const baseMatch = baseSource.match(/^(https?:)\/\/([^/?#]+)([^?#]*)?/i);
+  if (!baseMatch) return null;
+  const origin = `${baseMatch[1]}//${baseMatch[2]}`;
+
+  if (input.startsWith('//')) return `${baseMatch[1]}${input}`;
+
+  const target = splitUrl(input.replace(/\\/g, '/'));
+  const basePath = (baseMatch[3] || '/').replace(/\\/g, '/');
+  const baseDir = basePath.slice(0, basePath.lastIndexOf('/') + 1) || '/';
+  const path = target.path.startsWith('/') ? target.path : `${baseDir}${target.path}`;
+  const segments = [];
+  path.split('/').forEach((segment) => {
+    if (!segment || segment === '.') return;
+    if (segment === '..') segments.pop();
+    else segments.push(segment);
+  });
+  return `${origin}/${segments.join('/')}${target.suffix}`;
+}
+
+function nameFromUrl(value) {
+  return splitArtistTitle(fileNameFromUrl(value));
 }
 
 function addLinkTrack(builder, data, collectionId) {
@@ -1102,12 +1146,7 @@ async function importListLink(link, builder) {
   });
 
   if (!trackIds.length) throw new Error('В списке не найдено ни одного трека');
-  let title = 'Плейлист по ссылке';
-  try {
-    title = decodeURIComponent(new URL(link).pathname.split('/').filter(Boolean).pop() || title);
-  } catch (error) {
-    // keep default
-  }
+  const title = fileNameFromUrl(link, 'Плейлист по ссылке');
   builder.addCollection(
     {
       id: collectionId,

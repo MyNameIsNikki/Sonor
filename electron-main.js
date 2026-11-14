@@ -128,6 +128,29 @@ function createWindow() {
 
   installMenu();
 
+  // Ссылки на сайты сервисов открываем в системном браузере, а не внутри
+  // приложения: иначе страница OAuth заменяет сам плеер.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/i.test(url)) {
+      shell.openExternal(url).catch(() => {});
+    }
+    return { action: 'deny' };
+  });
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const currentUrl = event.sender.getURL();
+    const devUrl = 'http://localhost:19006';
+    const internal =
+      url === currentUrl ||
+      url.startsWith('file://') ||
+      (process.env.NODE_ENV === 'development' && (url === devUrl || url.startsWith(devUrl + '/')));
+    if (internal) return;
+    event.preventDefault();
+    if (/^https?:/i.test(url)) {
+      shell.openExternal(url).catch(() => {});
+    }
+  });
+
   mainWindow.once('ready-to-show', () => {
     if (!mainWindow) return;
     if (mainWindow.isMinimized()) mainWindow.restore();
@@ -400,19 +423,29 @@ function readLibrary() {
   try {
     const raw = fs.readFileSync(libraryFile(), 'utf8');
     const parsed = JSON.parse(raw);
-    if (!parsed || !Array.isArray(parsed.tracks)) return emptyLibrary();
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.tracks)) {
+      throw new Error('Формат файла библиотеки повреждён');
+    }
+    const tracks = parsed.tracks.map(sanitizeTrack).filter(Boolean);
+    const collections = Array.isArray(parsed.collections)
+      ? parsed.collections.map(sanitizeCollection).filter(Boolean)
+      : [];
+    // Непустой список, из которого не выжил ни один трек, почти наверняка
+    // означает повреждённую схему. Не отдаём его как «пустую библиотеку»,
+    // иначе автосохранение затрёт исходные данные.
+    if (parsed.tracks.length && !tracks.length) {
+      throw new Error('В библиотеке не осталось корректных треков');
+    }
     return {
-      tracks: parsed.tracks.map(sanitizeTrack).filter(Boolean),
-      collections: Array.isArray(parsed.collections)
-        ? parsed.collections.map(sanitizeCollection).filter(Boolean)
-        : [],
+      tracks: tracks,
+      collections: collections,
       stats: sanitizeStats(parsed.stats),
       savedAt: parsed.savedAt || null
     };
   } catch (err) {
     if (err.code === 'ENOENT') return emptyLibrary();
     console.error('Не удалось прочитать библиотеку:', err.message);
-    return emptyLibrary();
+    throw err;
   }
 }
 
@@ -426,11 +459,20 @@ async function saveLibrary(input) {
   return { ok: true, savedAt: data.savedAt };
 }
 
+// Записи библиотеки должны выполняться строго по очереди: два параллельных
+// сохранения используют один временный файл и могут испортить library.json.
+let librarySaveChain = Promise.resolve();
+
 ipcMain.handle('load-library', async () => readLibrary());
 
 ipcMain.handle('save-library', async (event, payload) => {
+  const task = librarySaveChain.then(
+    () => saveLibrary(payload),
+    () => saveLibrary(payload)
+  );
+  librarySaveChain = task.catch(function () {});
   try {
-    return await saveLibrary(payload);
+    return await task;
   } catch (err) {
     console.error('Не удалось сохранить библиотеку:', err.message);
     return { ok: false, error: err.message };

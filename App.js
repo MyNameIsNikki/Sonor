@@ -29,6 +29,19 @@ const LIBRARY_FILE = FileSystem.documentDirectory
   ? `${FileSystem.documentDirectory}sonor-library.json`
   : null;
 
+const LIBRARY_BACKUP_FILE = LIBRARY_FILE ? `${LIBRARY_FILE}.bak` : null;
+
+// Ссылки Яндекс Музыки и Audius подписанные и быстро истекают: их нельзя
+// восстанавливать из сохранённой библиотеки, их нужно получать заново.
+const isTemporaryStream = (track) => {
+  if (!track) return false;
+  if (track.source === 'yandex' || track.source === 'audius') return true;
+  return (
+    track.source === 'link' &&
+    (track.provider === 'yandex' || track.provider === 'audius')
+  );
+};
+
 const TOKEN_KEYS = {
   vk: 'sonor_token_vk',
   yandex: 'sonor_token_yandex',
@@ -60,7 +73,6 @@ const TABS = [
 ];
 
 export default function App() {
-  const [sound, setSound] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTrack, setCurrentTrack] = useState(null);
   const [tracks, setTracks] = useState([]);
@@ -81,6 +93,14 @@ export default function App() {
   const tokensRef = useRef({});
   const nextTrackRef = useRef(null);
   const scrollRef = useRef(null);
+  const soundRef = useRef(null);
+  const pendingTrackRef = useRef(null);
+  const playbackRequestRef = useRef(0);
+  const playRequestRef = useRef(0);
+  const selectingTrackRef = useRef(false);
+  const libraryWritableRef = useRef(false);
+  const libraryWriteRef = useRef(Promise.resolve());
+  const recoveredLibraryRef = useRef(false);
 
   useEffect(() => {
     let alive = true;
@@ -90,12 +110,28 @@ export default function App() {
       const localIds = new Set(localTracks.map((track) => track.id));
       const imported = saved.tracks
         .filter((track) => track && track.id && !localIds.has(track.id))
-        .map((track) => ({ ...track, src: track.path || track.url || null }));
+        .map((track) => ({
+          ...track,
+          src: track.path || (isTemporaryStream(track) ? null : track.url) || null
+        }));
       setTracks([...localTracks, ...imported]);
       setCollections(saved.collections);
+      libraryWritableRef.current = saved.ok === true;
+      recoveredLibraryRef.current = saved.recovered === true;
+      setLibraryReady(true);
+      if (!saved.ok) {
+        Alert.alert(
+          'Библиотека не загружена',
+          'Файл медиатеки повреждён или недоступен. Автосохранение отключено, чтобы не потерять данные. Перезапустите приложение после проверки хранилища.'
+        );
+      } else if (saved.recovered) {
+        Alert.alert(
+          'Библиотека восстановлена',
+          'Основной файл не читался, поэтому Sonor загрузил резервную копию.'
+        );
+      }
       const remembered = await loadRememberedTokens();
       if (!alive) return;
-      setLibraryReady(true);
       if (Object.keys(remembered).length) {
         syncRemembered(remembered, true);
       }
@@ -107,12 +143,15 @@ export default function App() {
 
   useEffect(() => {
     return () => {
-      if (sound) sound.unloadAsync().catch(() => {});
+      playbackRequestRef.current += 1;
+      const player = soundRef.current;
+      soundRef.current = null;
+      if (player) player.unloadAsync().catch(() => {});
     };
-  }, [sound]);
+  }, []);
 
   useEffect(() => {
-    if (!libraryReady || !LIBRARY_FILE) return undefined;
+    if (!libraryReady || !LIBRARY_FILE || !libraryWritableRef.current) return undefined;
     const timer = setTimeout(() => {
       const imported = tracks
         .filter((track) => track.source !== 'local')
@@ -123,7 +162,8 @@ export default function App() {
           artist: track.artist,
           album: track.album || '',
           duration: track.duration || 0,
-          url: track.url || null,
+          // Подписанные ссылки Яндекса и Audius истекают, поэтому не сохраняем их.
+          url: isTemporaryStream(track) ? null : track.url || null,
           path: track.path || null,
           image: track.image || null,
           source: track.source,
@@ -142,7 +182,28 @@ export default function App() {
         collections,
         savedAt: new Date().toISOString()
       });
-      FileSystem.writeAsStringAsync(LIBRARY_FILE, payload).catch(() => {});
+
+      const tempFile = `${LIBRARY_FILE}.tmp`;
+      libraryWriteRef.current = libraryWriteRef.current
+        .catch(() => {})
+        .then(async () => {
+          if (!libraryWritableRef.current) return;
+          await FileSystem.writeAsStringAsync(tempFile, payload);
+          const current = await FileSystem.getInfoAsync(LIBRARY_FILE);
+          // Если библиотека была восстановлена из backup, основной файл
+          // заведомо повреждён. Не копируем его поверх единственной хорошей
+          // копии — просто заменяем основной файл новыми данными.
+          if (current.exists && !recoveredLibraryRef.current) {
+            await FileSystem.deleteAsync(LIBRARY_BACKUP_FILE, { idempotent: true });
+            await FileSystem.copyAsync({ from: LIBRARY_FILE, to: LIBRARY_BACKUP_FILE });
+          }
+          await FileSystem.deleteAsync(LIBRARY_FILE, { idempotent: true });
+          await FileSystem.moveAsync({ from: tempFile, to: LIBRARY_FILE });
+          recoveredLibraryRef.current = false;
+        })
+        .catch((error) => {
+          console.log('Не удалось сохранить медиатеку:', error.message);
+        });
     }, 700);
     return () => clearTimeout(timer);
   }, [tracks, collections, libraryReady]);
@@ -221,23 +282,52 @@ export default function App() {
     }
   };
 
-  const loadSavedLibrary = async () => {
-    if (!LIBRARY_FILE) return { tracks: [], collections: [] };
-    try {
-      const info = await FileSystem.getInfoAsync(LIBRARY_FILE);
-      if (!info.exists) return { tracks: [], collections: [] };
-      const raw = await FileSystem.readAsStringAsync(LIBRARY_FILE);
-      const data = JSON.parse(raw);
-      return {
-        tracks: Array.isArray(data.tracks) ? data.tracks.filter((track) => track && track.id) : [],
-        collections: Array.isArray(data.collections)
-          ? data.collections.filter((collection) => collection && collection.id)
-          : []
-      };
-    } catch (error) {
-      console.log('Не удалось прочитать сохранённую медиатеку:', error.message);
-      return { tracks: [], collections: [] };
+  const readLibraryFile = async (file) => {
+    if (!file) return null;
+    const info = await FileSystem.getInfoAsync(file);
+    if (!info.exists) return null;
+    const raw = await FileSystem.readAsStringAsync(file);
+    const data = JSON.parse(raw);
+    if (!data || !Array.isArray(data.tracks) || !Array.isArray(data.collections)) {
+      throw new Error('Неверный формат файла медиатеки');
     }
+    return {
+      tracks: data.tracks.filter((track) => track && track.id),
+      collections: data.collections.filter((collection) => collection && collection.id)
+    };
+  };
+
+  const loadSavedLibrary = async () => {
+    if (!LIBRARY_FILE) return { tracks: [], collections: [], ok: true };
+    let primaryError = null;
+    let primary = null;
+    try {
+      primary = await readLibraryFile(LIBRARY_FILE);
+    } catch (error) {
+      primaryError = error;
+      console.log('Не удалось прочитать сохранённую медиатеку:', error.message);
+    }
+    if (primary) return { ...primary, ok: true };
+
+    try {
+      const backup = await readLibraryFile(LIBRARY_BACKUP_FILE);
+      if (backup) return { ...backup, ok: true, recovered: true };
+    } catch (error) {
+      console.log('Не удалось прочитать резервную копию медиатеки:', error.message);
+    }
+
+    // Если основного файла нет и резервной копии тоже, это просто первый
+    // запуск. Если файл был, но не читается — запрещаем автосохранение.
+    const primaryExists = await FileSystem.getInfoAsync(LIBRARY_FILE)
+      .then((info) => info.exists)
+      .catch(() => true);
+    const backupExists = await FileSystem.getInfoAsync(LIBRARY_BACKUP_FILE)
+      .then((info) => info.exists)
+      .catch(() => false);
+    if (primaryExists || backupExists || primaryError) {
+      return { tracks: [], collections: [], ok: false, error: primaryError };
+    }
+    return { tracks: [], collections: [], ok: true };
   };
 
   const loadRememberedTokens = async () => {
@@ -380,7 +470,7 @@ export default function App() {
     syncRemembered(remembered, false);
   };
 
-  const startPlayback = async (track, uri) => {
+  const startPlayback = async (track, uri, playRequest) => {
     if (!uri) {
       Alert.alert(
         'Нет ссылки',
@@ -388,93 +478,228 @@ export default function App() {
           ? 'Spotify отдаёт только 30-секундные превью, и для этого трека оно недоступно.'
           : 'У этого трека нет прямой ссылки. Импортируйте медиатеку или добавьте ссылку заново — ссылки сервисов со временем истекают.'
       );
-      return;
+      return false;
     }
 
-    if (sound) await sound.unloadAsync().catch(() => {});
-    const { sound: newSound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
+    const previous = soundRef.current;
+    let newSound = null;
+
+    try {
+      // Сначала загружаем новый трек, не останавливая текущий. Если загрузка
+      // не удалась, предыдущий трек продолжает играть.
+      const created = await Audio.Sound.createAsync({ uri }, { shouldPlay: false });
+      newSound = created.sound;
+    } catch (error) {
+      // Невалидный старый callback не должен оставаться: если звука ещё не
+      // было, просто показываем, что играть нечего.
+      if (!previous && playRequest === playRequestRef.current) {
+        setIsPlaying(false);
+        setPosition(0);
+        setDuration(0);
+      }
+      throw error;
+    }
+
+    // Пока шла загрузка, пользователь мог выбрать другой трек.
+    if (playRequest !== playRequestRef.current) {
+      newSound.unloadAsync().catch(() => {});
+      return false;
+    }
+
+    // Публикуем новый звук атомарно: старый callback сразу перестаёт
+    // обновлять состояние, но старый звук ещё играет до этой точки.
+    const playbackRequest = ++playbackRequestRef.current;
+    soundRef.current = newSound;
+    if (previous && previous !== newSound) {
+      previous.unloadAsync().catch(() => {});
+    }
+
+    let finished = false;
+
     newSound.setOnPlaybackStatusUpdate((status) => {
-      if (status.isLoaded) {
-        setPosition(status.positionMillis || 0);
-        setDuration(status.durationMillis || 0);
-        setIsPlaying(!!status.isPlaying);
-        if (status.didJustFinish && nextTrackRef.current) {
-          nextTrackRef.current();
+      if (playbackRequest !== playbackRequestRef.current || soundRef.current !== newSound) return;
+      if (!status.isLoaded) {
+        if (status.error) {
+          console.log('Ошибка воспроизведения:', status.error);
+          setIsPlaying(false);
         }
+        return;
+      }
+      if (Number.isFinite(status.positionMillis)) {
+        setPosition(status.positionMillis);
+      }
+      if (Number.isFinite(status.durationMillis) && status.durationMillis > 0) {
+        setDuration(status.durationMillis);
+      }
+      setIsPlaying(!!status.isPlaying);
+
+      if (status.didJustFinish && !finished) {
+        finished = true;
+        setIsPlaying(false);
+        if (nextTrackRef.current) nextTrackRef.current(playRequest);
       }
     });
 
-    setSound(newSound);
-    setIsPlaying(true);
     setCurrentTrack(track);
     setPosition(0);
-    setDuration(track.duration || 0);
+    setDuration(Number(track.duration) || 0);
+    setIsPlaying(true);
+
+    try {
+      await newSound.playAsync();
+    } catch (error) {
+      if (playbackRequest !== playbackRequestRef.current) return false;
+      setIsPlaying(false);
+      throw error;
+    }
+
+    return true;
   };
 
-  const handlePlayTrack = async (track) => {
-    let playable = track;
-    let uri = track.path || track.uri || track.url || track.src;
+  const playTrackInternal = async (track, request) => {
+    if (request !== playRequestRef.current) return false;
+    setResolvingTrackId(null);
 
     const isYandex =
       track.source === 'yandex' || (track.source === 'link' && track.provider === 'yandex');
-    if (!uri && isYandex) {
-      const token = tokensRef.current.yandex || null;
-      if (!token && !track.public) {
-        Alert.alert(
-          'Нужен токен Яндекса',
-          'Ссылки Яндекс Музыки не сохраняются между запусками. Откройте «Импорт музыки», вставьте токен и импортируйте медиатеку заново.'
-        );
-        return;
-      }
-      setResolvingTrackId(track.id);
-      try {
+    const isAudius =
+      track.source === 'audius' || (track.source === 'link' && track.provider === 'audius');
+    const hasLocalSource = !!(track.path || track.uri);
+    // Для Яндекса и Audius всегда получаем свежую подписанную ссылку:
+    // сохранённая может быть уже недействительной.
+    const needsFreshStream = !hasLocalSource && (isYandex || isAudius);
+    let playable = track;
+    let uri = track.path || track.uri || track.url || track.src || null;
+    let lastError = null;
+
+    const commitDirectUrl = (directUrl) => {
+      if (!directUrl) return;
+      playable = { ...track, url: directUrl, src: directUrl };
+      setTracks((previous) =>
+        previous.map((item) =>
+          item.id === track.id ? { ...item, url: directUrl, src: directUrl } : item
+        )
+      );
+      uri = directUrl;
+    };
+
+    const resolveFresh = async () => {
+      let directUrl = null;
+      if (isYandex) {
+        const token = tokensRef.current.yandex || null;
+        if (!token && !track.public) {
+          throw new Error(
+            'Нужен токен Яндекса. Откройте «Импорт музыки» и подключите аккаунт заново.'
+          );
+        }
         const externalId =
           track.externalId ||
           String(track.id)
             .replace(/^link_/, '')
             .replace(/^yandex_/, '');
-        let directUrl;
         try {
           directUrl = await resolveYandexStream(externalId, token);
         } catch (error) {
+          if (request !== playRequestRef.current) return null;
           if (!track.public) throw error;
           directUrl = await resolveYandexStream(externalId, null);
         }
-        playable = { ...track, url: directUrl, src: directUrl };
-        setTracks((previous) =>
-          previous.map((item) => (item.id === track.id ? { ...item, url: directUrl, src: directUrl } : item))
-        );
-        uri = directUrl;
-      } catch (error) {
-        Alert.alert('Яндекс Музыка', `Не удалось получить ссылку на трек.\n\n${error.message}`);
-        return;
-      } finally {
-        setResolvingTrackId(null);
+      } else if (isAudius && track.externalId) {
+        directUrl = await resolveAudiusStream(track.externalId);
       }
-    }
+      if (request !== playRequestRef.current) return null;
+      commitDirectUrl(directUrl);
+      return directUrl;
+    };
 
-    if (!uri && track.source === 'audius' && track.externalId) {
+    if (needsFreshStream) {
       setResolvingTrackId(track.id);
       try {
-        const directUrl = await resolveAudiusStream(track.externalId);
-        playable = { ...track, url: directUrl, src: directUrl };
-        setTracks((previous) =>
-          previous.map((item) => (item.id === track.id ? { ...item, url: directUrl, src: directUrl } : item))
-        );
-        uri = directUrl;
+        await resolveFresh();
       } catch (error) {
-        Alert.alert('Audius', `Не удалось получить поток.\n\n${error.message}`);
-        return;
+        if (request === playRequestRef.current) lastError = error;
       } finally {
-        setResolvingTrackId(null);
+        if (request === playRequestRef.current) setResolvingTrackId(null);
       }
+      if (request !== playRequestRef.current) return false;
+    }
+
+    if (!uri) {
+      const detail = lastError && lastError.message ? `\n\n${lastError.message}` : '';
+      if (isYandex || isAudius) {
+        Alert.alert(
+          isYandex ? 'Яндекс Музыка' : 'Audius',
+          `Не удалось получить ссылку на трек.${detail}`
+        );
+      } else {
+        Alert.alert(
+          'Нет ссылки',
+          track.source === 'spotify' || (track.source === 'link' && track.provider === 'spotify')
+            ? 'Spotify отдаёт только 30-секундные превью, и для этого трека оно недоступно.'
+            : 'У этого трека нет прямой ссылки. Импортируйте медиатеку или добавьте ссылку заново — ссылки сервисов со временем истекают.'
+        );
+      }
+      return false;
     }
 
     try {
-      await startPlayback(playable, uri);
+      return await startPlayback(playable, uri, request);
     } catch (error) {
+      if (request !== playRequestRef.current) return false;
+
+      // Один повтор для подписанного потока: ссылка могла истечь между
+      // импортом и нажатием на трек.
+      if (needsFreshStream) {
+        playable = { ...track, url: null, src: null };
+        uri = null;
+        setTracks((previous) =>
+          previous.map((item) =>
+            item.id === track.id ? { ...item, url: null, src: null } : item
+          )
+        );
+        setResolvingTrackId(track.id);
+        try {
+          const directUrl = await resolveFresh();
+          if (request !== playRequestRef.current) return false;
+          if (directUrl) {
+            try {
+              return await startPlayback(playable, directUrl, request);
+            } catch (retryError) {
+              if (request === playRequestRef.current) lastError = retryError;
+            }
+          }
+        } catch (retryError) {
+          if (request === playRequestRef.current) lastError = retryError;
+        } finally {
+          if (request === playRequestRef.current) setResolvingTrackId(null);
+        }
+        if (request !== playRequestRef.current) return false;
+      }
+
       console.error('Ошибка воспроизведения:', error);
-      Alert.alert('Ошибка', 'Не удалось воспроизвести трек');
+      Alert.alert(
+        'Ошибка',
+        `Не удалось воспроизвести трек.\n\n${
+          (lastError && lastError.message) ||
+          error.message ||
+          'Проверьте подключение к интернету.'
+        }`
+      );
+      return false;
+    }
+  };
+
+  const handlePlayTrack = async (track) => {
+    pendingTrackRef.current = track;
+    const request = ++playRequestRef.current;
+    selectingTrackRef.current = true;
+    try {
+      const ok = await playTrackInternal(track, request);
+      if (!ok && request === playRequestRef.current) pendingTrackRef.current = null;
+      return ok;
+    } finally {
+      // Не сбрасываем флаг, если уже выбран другой трек: он ещё в процессе.
+      if (request === playRequestRef.current) selectingTrackRef.current = false;
     }
   };
 
@@ -517,7 +742,10 @@ export default function App() {
   const playAdjacent = async (direction) => {
     const queue = visibleTracks.length ? visibleTracks : tracks;
     if (!queue.length) return;
-    const index = currentTrack ? queue.findIndex((item) => item.id === currentTrack.id) : -1;
+    // Если трек ещё загружается, следующий считается от него, а не от
+    // предыдущего — иначе быстрые нажатия «дальше» застревают.
+    const baseTrack = pendingTrackRef.current || currentTrack;
+    const index = baseTrack ? queue.findIndex((item) => item.id === baseTrack.id) : -1;
     let nextIndex;
     if (index === -1) {
       nextIndex = direction > 0 ? 0 : queue.length - 1;
@@ -527,24 +755,38 @@ export default function App() {
     await handlePlayTrack(queue[nextIndex]);
   };
 
-  nextTrackRef.current = () => playAdjacent(1);
+  nextTrackRef.current = (sourceRequest) => {
+    // Старый трек не должен запускать автопереход, если пользователь уже
+    // выбрал другой, и пока новый трек ещё загружается.
+    if (sourceRequest && sourceRequest !== playRequestRef.current) return;
+    if (!selectingTrackRef.current) playAdjacent(1);
+  };
 
   const togglePlayback = async () => {
-    if (!sound) return;
-    if (isPlaying) {
-      await sound.pauseAsync();
-      setIsPlaying(false);
-    } else {
-      await sound.playAsync();
-      setIsPlaying(true);
+    const player = soundRef.current;
+    if (!player) return;
+    try {
+      if (isPlaying) {
+        await player.pauseAsync();
+        setIsPlaying(false);
+      } else {
+        await player.playAsync();
+        setIsPlaying(true);
+      }
+    } catch (error) {
+      console.log('Не удалось переключить воспроизведение:', error.message);
+      Alert.alert('Ошибка', 'Не удалось переключить воспроизведение.');
     }
   };
 
   const seekTo = async (milliseconds) => {
-    if (!sound) return;
-    const value = Math.max(0, Number(milliseconds) || 0);
+    const player = soundRef.current;
+    if (!player) return;
+    let value = Math.max(0, Number(milliseconds) || 0);
+    const total = Number(duration) || 0;
+    if (total > 0) value = Math.min(value, total);
     try {
-      await sound.setPositionAsync(value);
+      await player.setPositionAsync(value);
       setPosition(value);
     } catch (error) {
       console.log('Не удалось перейти к моменту трека:', error.message);
@@ -584,22 +826,68 @@ export default function App() {
   const handleLinkComplete = (result) => {
     const linkCollections = result.collections || [];
     const collectionIds = new Set(linkCollections.map((collection) => collection.id));
-    const imported = (result.tracks || []).map((track) => ({
-      ...track,
-      duration: Math.round((track.duration || 0) * 1000),
-      src: track.url || null
-    }));
+    const importedById = new Map();
+    (result.tracks || []).forEach((track) => {
+      if (!track || !track.id) return;
+      importedById.set(track.id, {
+        ...track,
+        duration: Math.round((track.duration || 0) * 1000),
+        src: track.url || null
+      });
+    });
+    const imported = Array.from(importedById.values());
+    const importedIds = new Set(imported.map((track) => track.id));
 
-    setTracks((previous) => [
-      ...previous.filter(
-        (track) => !(track.source === 'link' && track.origin && collectionIds.has(track.origin))
-      ),
-      ...imported
-    ]);
+    const nextTracks = tracks.filter(
+      (track) =>
+        !(
+          track.source === 'link' &&
+          ((track.origin && collectionIds.has(track.origin)) || importedIds.has(track.id))
+        )
+    );
+    const existingById = new Map(tracks.map((track) => [track.id, track]));
+    const replacements = new Map();
+    imported.forEach((track) => {
+      const existing = existingById.get(track.id);
+      const index = existing ? nextTracks.indexOf(existing) : -1;
+      if (index === -1) {
+        nextTracks.push(track);
+        return;
+      }
+      // Тот же трек уже есть в другой коллекции — обновляем его, а не
+      // добавляем второй экземпляр с тем же id.
+      const merged = {
+        ...existing,
+        ...track,
+        id: existing.id,
+        origin: track.origin || existing.origin
+      };
+      nextTracks[index] = merged;
+      replacements.set(track.id, merged);
+    });
+
+    setTracks(nextTracks);
     setCollections((previous) => [
       ...previous.filter((collection) => !collectionIds.has(collection.id)),
       ...linkCollections
     ]);
+    if (currentTrack && replacements.has(currentTrack.id)) {
+      setCurrentTrack(replacements.get(currentTrack.id));
+    } else if (currentTrack && !nextTracks.some((track) => track.id === currentTrack.id)) {
+      // Импорт заменил коллекцию, в которой был текущий трек. Не оставляем
+      // играть звук, которого больше нет в медиатеке.
+      playRequestRef.current += 1;
+      playbackRequestRef.current += 1;
+      pendingTrackRef.current = null;
+      const player = soundRef.current;
+      soundRef.current = null;
+      if (player) player.unloadAsync().catch(() => {});
+      setIsPlaying(false);
+      setCurrentTrack(null);
+      setPosition(0);
+      setDuration(0);
+    }
+
     setActiveCollectionId(null);
     setActiveTab('all');
     setVisibleLimit(300);
@@ -615,7 +903,11 @@ export default function App() {
   };
 
   const handlePlaylistComplete = (result) => {
-    const imported = result.tracks || [];
+    const importedById = new Map();
+    (result.tracks || []).forEach((track) => {
+      if (track && track.id) importedById.set(track.id, track);
+    });
+    const imported = Array.from(importedById.values());
     const importedCollections = result.collections || [];
     const trackIds = new Set(imported.map((track) => track.id));
     const collectionIds = new Set(importedCollections.map((collection) => collection.id));
@@ -628,6 +920,9 @@ export default function App() {
       ...previous.filter((collection) => !collectionIds.has(collection.id)),
       ...importedCollections
     ]);
+    if (currentTrack && importedById.has(currentTrack.id)) {
+      setCurrentTrack(importedById.get(currentTrack.id));
+    }
     setActiveCollectionId(null);
     setActiveTab('all');
     setVisibleLimit(300);
@@ -768,7 +1063,7 @@ export default function App() {
           <View style={styles.header}>
             <Text style={styles.appTitle}>🎧 SONOR</Text>
             <Text style={styles.subtitle}>VK • Яндекс • Spotify • Audius</Text>
-            <Text style={styles.version}>MOBILE 1.8.0 · SYNCED LYRICS</Text>
+            <Text style={styles.version}>MOBILE 1.8.1 · SYNCED LYRICS</Text>
           </View>
 
           <View style={styles.statsRow}>

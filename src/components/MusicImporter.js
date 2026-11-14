@@ -69,7 +69,7 @@ const MusicImporter = ({
   const [oauthStatus, setOauthStatus] = useState('');
   const oauthTimerRef = useRef(null);
   const oauthFlowRef = useRef(null);
-  const oauthCancelledRef = useRef(false);
+  const oauthStartRef = useRef(0);
 
   useEffect(() => {
     let alive = true;
@@ -81,8 +81,13 @@ const MusicImporter = ({
     if (savedServices.indexOf('yandex') !== -1) setOauthConnected(true);
     return () => {
       alive = false;
-      oauthCancelledRef.current = true;
-      if (oauthTimerRef.current) clearTimeout(oauthTimerRef.current);
+      oauthStartRef.current += 1;
+      if (oauthFlowRef.current) oauthFlowRef.current.cancelled = true;
+      oauthFlowRef.current = null;
+      if (oauthTimerRef.current) {
+        clearTimeout(oauthTimerRef.current);
+        oauthTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -195,37 +200,52 @@ const MusicImporter = ({
   };
 
   const stopOAuthFlow = () => {
-    oauthCancelledRef.current = true;
+    oauthStartRef.current += 1;
+    if (oauthFlowRef.current) oauthFlowRef.current.cancelled = true;
+    oauthFlowRef.current = null;
     if (oauthTimerRef.current) {
       clearTimeout(oauthTimerRef.current);
       oauthTimerRef.current = null;
     }
-    oauthFlowRef.current = null;
     setOauthBusy(false);
     setOauthModalOpen(false);
   };
 
   const waitForYandex = (clientId, flow) => {
     const expiresAt = Date.now() + flow.expiresIn * 1000;
-    oauthCancelledRef.current = false;
+    const isActive = () => oauthFlowRef.current === flow && !flow.cancelled;
+
+    const finishFlow = (message) => {
+      flow.cancelled = true;
+      if (oauthFlowRef.current === flow) oauthFlowRef.current = null;
+      if (oauthTimerRef.current) {
+        clearTimeout(oauthTimerRef.current);
+        oauthTimerRef.current = null;
+      }
+      setOauthBusy(false);
+      setOauthModalOpen(false);
+      setOauthStatus(message);
+    };
 
     const poll = async () => {
-      if (oauthCancelledRef.current) return;
+      if (!isActive()) return;
       if (Date.now() > expiresAt) {
-        stopOAuthFlow();
-        setOauthStatus('✕ Код входа истёк. Получите новый код.');
+        finishFlow('✕ Код входа истёк. Получите новый код.');
         return;
       }
 
       try {
         const result = await pollYandexDeviceFlow(clientId, flow.deviceCode);
-        if (oauthCancelledRef.current) return;
+        // Пока шёл запрос, пользователь мог отменить вход или начать новый.
+        if (!isActive()) return;
 
         if (result.status === 'ok') {
-          oauthCancelledRef.current = true;
-          if (oauthTimerRef.current) clearTimeout(oauthTimerRef.current);
-          oauthTimerRef.current = null;
-          oauthFlowRef.current = null;
+          flow.cancelled = true;
+          if (oauthFlowRef.current === flow) oauthFlowRef.current = null;
+          if (oauthTimerRef.current) {
+            clearTimeout(oauthTimerRef.current);
+            oauthTimerRef.current = null;
+          }
           setOauthModalOpen(false);
           setOauthConnected(true);
           setOauthBusy(false);
@@ -252,8 +272,7 @@ const MusicImporter = ({
         }
 
         if (result.status === 'error') {
-          stopOAuthFlow();
-          setOauthStatus(`✕ ${result.error || 'Не удалось войти через Яндекс'}`);
+          finishFlow(`✕ ${result.error || 'Не удалось войти через Яндекс'}`);
           return;
         }
 
@@ -263,14 +282,14 @@ const MusicImporter = ({
             ? 'Яндекс просит подождать. Проверяем снова через несколько секунд…'
             : 'Ожидаем подтверждения на сайте Яндекса…'
         );
+        if (!isActive()) return;
         oauthTimerRef.current = setTimeout(
           poll,
           Math.max(3, Number(flow.interval) || 5) * 1000
         );
       } catch (error) {
-        if (oauthCancelledRef.current) return;
-        stopOAuthFlow();
-        setOauthStatus(`✕ ${error.message || 'Не удалось проверить вход'}`);
+        if (!isActive()) return;
+        finishFlow(`✕ ${error.message || 'Не удалось проверить вход'}`);
       }
     };
 
@@ -301,17 +320,32 @@ const MusicImporter = ({
       return;
     }
 
+    // Каждый запуск получает свой номер. Старый ответ Яндекса не должен
+    // перехватывать управление у нового входа.
+    const startId = ++oauthStartRef.current;
+    if (oauthFlowRef.current) oauthFlowRef.current.cancelled = true;
+    oauthFlowRef.current = null;
+    if (oauthTimerRef.current) {
+      clearTimeout(oauthTimerRef.current);
+      oauthTimerRef.current = null;
+    }
+
     try {
       await saveYandexClientId(normalized);
     } catch (error) {
       setOauthStatus('Client ID не сохранён, но вход можно продолжить.');
     }
+    if (startId !== oauthStartRef.current) return;
 
     setOauthBusy(true);
     setOauthStatus('Запрашиваем код у Яндекса…');
 
     try {
       const flow = await startYandexDeviceFlow(normalized);
+      if (startId !== oauthStartRef.current) {
+        flow.cancelled = true;
+        return;
+      }
       oauthFlowRef.current = flow;
       setOauthCode(flow.userCode);
       setOauthUrl(flow.verificationUrl || YANDEX_DEVICE_URL);
@@ -320,6 +354,7 @@ const MusicImporter = ({
       waitForYandex(normalized, flow);
       openYandexUrl(flow.verificationUrl || YANDEX_DEVICE_URL);
     } catch (error) {
+      if (startId !== oauthStartRef.current) return;
       setOauthBusy(false);
       setOauthStatus(`✕ ${error.message || 'Не удалось начать вход через Яндекс'}`);
     }

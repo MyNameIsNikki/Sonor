@@ -29,7 +29,9 @@ function normalizeQuery(input) {
   const album = clean(source.album);
   let duration = Number(source.duration);
   if (!Number.isFinite(duration) || duration <= 0) duration = 0;
-  if (duration > 1000) duration = duration / 1000;
+  // Сонар передаёт длительность в миллисекундах. Ровно 1000 мс — это одна
+  // секунда, а не 1000 секунд, поэтому границу включаем.
+  if (duration >= 1000) duration = duration / 1000;
 
   const variants = [];
   if (title) variants.push(title);
@@ -102,7 +104,10 @@ function stripTimestamps(raw) {
     .replace(/\r\n?/g, '\n')
     .split('\n')
     .map(function (line) {
-      return line.replace(/\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g, '').trim();
+      return line
+        .replace(/\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g, '')
+        .replace(/\[[a-z]+:[^\]]*\]/gi, '')
+        .trim();
     })
     .filter(Boolean)
     .join('\n');
@@ -173,29 +178,68 @@ function scoreCandidate(candidate, query) {
   if (!candidate) return -Infinity;
   let score = 0;
 
-  if (candidate.syncedLyrics && parseLrc(candidate.syncedLyrics).length) score += 100;
+  const hasSynced = !!(candidate.syncedLyrics && parseLrc(candidate.syncedLyrics).length);
+  if (hasSynced) score += 100;
   else if (candidate.plainLyrics) score += 25;
   else if (candidate.instrumental) score += 10;
   else return -Infinity;
 
   const candidateTitle = normalizeForMatch(candidate.trackName);
   const queryTitle = normalizeForMatch(query.title);
-  if (queryTitle && candidateTitle === queryTitle) score += 45;
-  else if (queryTitle && candidateTitle && (candidateTitle.indexOf(queryTitle) !== -1 || queryTitle.indexOf(candidateTitle) !== -1)) score += 18;
+  let titleMatched = false;
+  if (queryTitle && candidateTitle === queryTitle) {
+    score += 45;
+    titleMatched = true;
+  } else if (
+    queryTitle &&
+    candidateTitle &&
+    (candidateTitle.indexOf(queryTitle) !== -1 || queryTitle.indexOf(candidateTitle) !== -1)
+  ) {
+    score += 18;
+    titleMatched = true;
+  }
 
   const candidateArtist = normalizeForMatch(candidate.artistName);
   const queryArtist = normalizeForMatch(query.artist);
-  if (queryArtist && candidateArtist === queryArtist) score += 35;
-  else if (queryArtist && candidateArtist && (candidateArtist.indexOf(queryArtist) !== -1 || queryArtist.indexOf(candidateArtist) !== -1)) score += 12;
+  let artistMatched = false;
+  if (queryArtist && candidateArtist === queryArtist) {
+    score += 35;
+    artistMatched = true;
+  } else if (
+    queryArtist &&
+    candidateArtist &&
+    (candidateArtist.indexOf(queryArtist) !== -1 || queryArtist.indexOf(candidateArtist) !== -1)
+  ) {
+    score += 12;
+    artistMatched = true;
+  }
 
-  if (query.album && normalizeForMatch(candidate.albumName) === normalizeForMatch(query.album)) score += 8;
+  if (query.album && normalizeForMatch(candidate.albumName) === normalizeForMatch(query.album)) {
+    score += 8;
+  }
 
+  let durationClose = false;
   if (query.duration && candidate.duration) {
     const diff = Math.abs(Number(candidate.duration) - query.duration);
-    if (diff <= 2) score += 55;
-    else if (diff <= 5) score += 28;
-    else if (diff <= 10) score += 8;
-    else if (diff > 20) score -= 35;
+    if (diff <= 2) {
+      score += 55;
+      durationClose = true;
+    } else if (diff <= 5) {
+      score += 28;
+      durationClose = true;
+    } else if (diff <= 10) {
+      score += 8;
+    } else if (diff > 20) {
+      score -= 35;
+    }
+  }
+
+  // Без совпадения по названию нельзя отдавать случайный текст: LRCLib
+  // часто возвращает десятки чужих песен на широкий поисковый запрос.
+  // Исключение — совпал исполнитель и длительность, то есть это вероятный
+  // вариант того же трека с другим написанием названия.
+  if (queryTitle && !titleMatched && !(artistMatched && durationClose)) {
+    return -Infinity;
   }
 
   return score;

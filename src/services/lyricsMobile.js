@@ -7,7 +7,7 @@ import {
 } from './lyricsCore';
 
 const API_BASE = 'https://lrclib.net/api';
-const USER_AGENT = 'Sonor/1.8.0 (https://github.com/MyNameIsNikki/Sonor)';
+const USER_AGENT = 'Sonor/1.8.1 (https://github.com/MyNameIsNikki/Sonor)';
 const REQUEST_TIMEOUT = 9000;
 const CACHE_TTL = 6 * 60 * 60 * 1000;
 const CACHE_LIMIT = 80;
@@ -108,9 +108,16 @@ export async function lookupLyrics(input) {
 
   const seen = {};
   const candidates = [];
+  let firstError = null;
 
   for (let index = 0; index < attempts.length; index += 1) {
-    const chunk = await search(attempts[index]);
+    let chunk;
+    try {
+      chunk = await search(attempts[index]);
+    } catch (error) {
+      if (!firstError) firstError = error;
+      continue;
+    }
     chunk.forEach((item) => {
       if (!item || typeof item !== 'object') return;
       const id = item.id || [item.trackName, item.artistName, item.albumName, item.duration].join('|');
@@ -118,8 +125,11 @@ export async function lookupLyrics(input) {
       seen[id] = true;
       candidates.push(item);
     });
-    if (pickBestCandidate(candidates, query)) break;
+    const bestForAttempt = pickBestCandidate(candidates, query);
+    if (bestForAttempt && bestForAttempt.syncedLyrics) break;
   }
+
+  if (!candidates.length && firstError) throw firstError;
 
   const best = pickBestCandidate(candidates, query);
   const result = {
