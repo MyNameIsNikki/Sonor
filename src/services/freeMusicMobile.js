@@ -127,9 +127,94 @@ async function searchAudius(query, limit) {
     .filter(Boolean);
 }
 
+async function fetchText(url, accept) {
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), 22000) : null;
+  try {
+    const response = await fetch(url, {
+      headers: { Accept: accept || 'application/xml, text/xml, */*' },
+      signal: controller ? controller.signal : undefined
+    });
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(`HTTP ${response.status}${body ? `: ${body.slice(0, 120)}` : ''}`);
+    }
+    return await response.text();
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function decodeXml(value) {
+  return text(value)
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&amp;/gi, '&');
+}
+
+function xmlTag(block, tag) {
+  const match = block.match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+  return match ? decodeXml(match[1]) : '';
+}
+
+function xmlAttr(block, tag, attr) {
+  const match = block.match(new RegExp(`<${tag}\\b[^>]*\\b${attr}="([^"]*)"`, 'i'));
+  return match ? decodeXml(match[1]) : '';
+}
+
+function mapCcmixterRss(item) {
+  const page = xmlTag(item, 'link') || xmlTag(item, 'guid');
+  const idMatch = page.match(/\/files\/[^/]+\/(\d+)/) || page.match(/\/(\d+)\/?$/);
+  const mediaUrl = xmlAttr(item, 'enclosure', 'url');
+  if (!idMatch || !isAudioUrl(mediaUrl)) return null;
+
+  const thumbnail = xmlAttr(item, 'media:thumbnail', 'url');
+  return {
+    id: `ccmixter_${idMatch[1]}`,
+    externalId: idMatch[1],
+    title: xmlTag(item, 'title') || 'Без названия',
+    artist: xmlTag(item, 'dc:creator') || 'ccMixter',
+    album: 'ccMixter',
+    duration: 0,
+    url: mediaUrl,
+    src: mediaUrl,
+    image: imageUrl(thumbnail),
+    source: 'ccmixter',
+    provider: 'ccmixter',
+    license: 'Creative Commons',
+    licenseUrl: xmlTag(item, 'cc:license'),
+    filePageUrl: page,
+    downloadable: true,
+    streamOnly: false
+  };
+}
+
+async function searchCcmixterRss(query, limit) {
+  const count = Math.min(Math.max(limit || 18, 1), 40);
+  const url = `https://ccmixter.org/api/query?f=rss&limit=${count}&search=${encodeURIComponent(query)}`;
+  const body = await fetchText(url, 'application/rss+xml, application/xml, text/xml');
+  return (body.match(/<item\b[\s\S]*?<\/item>/gi) || [])
+    .map(mapCcmixterRss)
+    .filter(Boolean)
+    .slice(0, count);
+}
+
 async function searchCcmixter(query, limit) {
   const url = `https://ccmixter.org/api/query?f=json&limit=${Math.min(Math.max(limit || 18, 1), 40)}&search=${encodeURIComponent(query)}`;
-  const data = await fetchJson(url);
+  let data;
+  try {
+    data = await fetchJson(url);
+  } catch (error) {
+    // ccMixter дублирует весь JSON в заголовке X-JSON. На некоторых
+    // мобильных сетевых стеках большой заголовок обрезается, поэтому
+    // для них есть RSS-фолбэк без X-JSON.
+    return searchCcmixterRss(query, limit);
+  }
   const items = Array.isArray(data) ? data : Array.isArray(data.results) ? data.results : [];
   const tracks = [];
   for (const item of items) {

@@ -48,9 +48,9 @@
 
 | Платформа | Файл | Где взять |
 |---|---|---|
-| Windows (установщик) | `Sonor-Setup-1.9.0.exe` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` после сборки |
-| Windows (портативная) | `Sonor-Music-Player-1.9.0-win.zip` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` |
-| Android (APK) | `Sonor-1.9.0.apk` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или артефакт workflow **Build Android APK** |
+| Windows (установщик) | `Sonor-Setup-1.9.1.exe` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` после сборки |
+| Windows (портативная) | `Sonor-Music-Player-1.9.1-win.zip` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` |
+| Android (APK) | `Sonor-1.9.1.apk` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или артефакт workflow **Build Android APK** |
 | iOS | `.ipa` | только через EAS Build (нужен Apple Developer) |
 
 > Для телефонов собирается **APK** (Android) — формат установочного файла для мобильных. `.exe` — это формат Windows, на телефоне он не запускается.
@@ -91,13 +91,15 @@ npm run build:windows
 
 Результат:
 
-- `release/Sonor-Setup-1.9.0.exe` — установщик с выбором папки, ярлыками на рабочем столе и в меню «Пуск»
-- `release/Sonor Music Player-1.9.0-win.zip` — портативная версия
+- `release/Sonor-Setup-1.9.1.exe` — установщик с выбором папки, ярлыками на рабочем столе и в меню «Пуск»
+- `release/Sonor Music Player-1.9.1-win.zip` — портативная версия
 - `release/win-unpacked/` — распакованное приложение
 
 Сборка не подписывается сертификатом (в конфиге `signAndEditExecutable: false`), поэтому Windows SmartScreen может показать предупреждение «Неизвестный издатель» — это нормально для неподписанных сборок. В метаданных файлов и установщика издатель указан как **ANV**; чтобы Windows показывала имя издателя без предупреждения, нужен платный сертификат подписи кода.
 
 Локальная команда `npm run build:windows` собирает файлы с `--publish never`: она никогда не публикует релиз и не может перезаписать уже проверенные ассеты на GitHub.
+
+Автообновление проверяет GitHub Releases и рассчитано на установленную NSIS-версию. В портативном ZIP обновление может установить отдельную копию приложения, поэтому для автообновления лучше использовать установщик.
 
 ### Android
 
