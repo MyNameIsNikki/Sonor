@@ -48,6 +48,8 @@ const TOKEN_KEYS = {
   spotify: 'sonor_token_spotify'
 };
 
+const PLAYBACK_MODES_KEY = 'sonor_playback_modes';
+
 const SERVICE_NAMES = {
   vk: 'VK Музыка',
   yandex: 'Яндекс Музыка',
@@ -89,6 +91,12 @@ export default function App() {
   const [savedServices, setSavedServices] = useState([]);
   const [secureStoreAvailable, setSecureStoreAvailable] = useState(true);
   const [autoSyncStatus, setAutoSyncStatus] = useState('');
+  const [playbackModes, setPlaybackModes] = useState({
+    shuffle: false,
+    repeatMode: 'all'
+  });
+  const [playbackModesReady, setPlaybackModesReady] = useState(false);
+  const { shuffle, repeatMode } = playbackModes;
 
   const tokensRef = useRef({});
   const nextTrackRef = useRef(null);
@@ -101,6 +109,9 @@ export default function App() {
   const libraryWritableRef = useRef(false);
   const libraryWriteRef = useRef(Promise.resolve());
   const recoveredLibraryRef = useRef(false);
+  const shuffleHistoryRef = useRef([]);
+  const shuffleBagRef = useRef([]);
+  const shuffleBagStartedRef = useRef(false);
 
   useEffect(() => {
     let alive = true;
@@ -149,6 +160,50 @@ export default function App() {
       if (player) player.unloadAsync().catch(() => {});
     };
   }, []);
+
+  useEffect(() => {
+    let alive = true;
+    const finish = () => {
+      if (alive) setPlaybackModesReady(true);
+    };
+
+    SecureStore.getItemAsync(PLAYBACK_MODES_KEY)
+      .then((raw) => {
+        if (!alive || !raw) {
+          finish();
+          return;
+        }
+        const saved = JSON.parse(raw);
+        if (saved) {
+          setPlaybackModes({
+            shuffle: typeof saved.shuffle === 'boolean' ? saved.shuffle : false,
+            repeatMode: ['off', 'all', 'one'].includes(saved.repeatMode)
+              ? saved.repeatMode
+              : 'all'
+          });
+        }
+        finish();
+      })
+      .catch(finish);
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!playbackModesReady) return;
+    SecureStore.setItemAsync(PLAYBACK_MODES_KEY, JSON.stringify(playbackModes)).catch(
+      () => {}
+    );
+  }, [playbackModesReady, playbackModes]);
+
+  useEffect(() => {
+    // Новая коллекция — новая очередь перемешивания.
+    shuffleHistoryRef.current = [];
+    shuffleBagRef.current = [];
+    shuffleBagStartedRef.current = false;
+  }, [activeCollectionId]);
 
   useEffect(() => {
     if (!libraryReady || !LIBRARY_FILE || !libraryWritableRef.current) return undefined;
@@ -739,27 +794,137 @@ export default function App() {
     return result;
   };
 
-  const playAdjacent = async (direction) => {
+  const toggleShuffle = () => {
+    shuffleHistoryRef.current = [];
+    shuffleBagRef.current = [];
+    shuffleBagStartedRef.current = false;
+    setPlaybackModes((current) => ({ ...current, shuffle: !current.shuffle }));
+  };
+
+  const cycleRepeat = () => {
+    setPlaybackModes((current) => ({
+      ...current,
+      repeatMode:
+        current.repeatMode === 'off'
+          ? 'all'
+          : current.repeatMode === 'all'
+            ? 'one'
+            : 'off'
+    }));
+  };
+
+  const pickShuffledIndex = (length, currentIndex) => {
+    if (length <= 1) return 0;
+    if (currentIndex < 0 || currentIndex >= length) {
+      return Math.floor(Math.random() * length);
+    }
+    let index = Math.floor(Math.random() * (length - 1));
+    if (index >= currentIndex) index += 1;
+    return index;
+  };
+
+  const playAdjacent = async (direction, options = {}) => {
     const queue = visibleTracks.length ? visibleTracks : tracks;
-    if (!queue.length) return;
+    if (!queue.length) return false;
+
     // Если трек ещё загружается, следующий считается от него, а не от
     // предыдущего — иначе быстрые нажатия «дальше» застревают.
     const baseTrack = pendingTrackRef.current || currentTrack;
     const index = baseTrack ? queue.findIndex((item) => item.id === baseTrack.id) : -1;
+    const auto = options.auto === true;
+
+    // Автоповтор одного трека перезапускает его, но ручные «дальше» и
+    // «назад» должны работать как обычно.
+    if (auto && repeatMode === 'one' && baseTrack) {
+      return handlePlayTrack(baseTrack);
+    }
+
     let nextIndex;
-    if (index === -1) {
+
+    if (shuffle && queue.length > 1) {
+      let historyIndex = -1;
+      if (direction < 0) {
+        while (shuffleHistoryRef.current.length && historyIndex === -1) {
+          const targetId = shuffleHistoryRef.current.pop();
+          historyIndex = queue.findIndex((item) => item.id === targetId);
+        }
+      }
+
+      if (historyIndex !== -1) {
+        nextIndex = historyIndex;
+        const currentId = baseTrack ? baseTrack.id : '';
+        if (
+          currentId &&
+          shuffleBagRef.current.indexOf(currentId) === -1 &&
+          queue.some((item) => item.id === currentId)
+        ) {
+          shuffleBagRef.current.push(currentId);
+        }
+      } else if (direction < 0) {
+        nextIndex = pickShuffledIndex(queue.length, index);
+      } else {
+        const queueIds = new Set(queue.map((item) => item.id));
+        let bag = shuffleBagRef.current.filter(
+          (id) => queueIds.has(id) && (!baseTrack || id !== baseTrack.id)
+        );
+
+        if (!bag.length) {
+          // Перемешивание без повтора останавливается, когда все треки
+          // текущей очереди уже сыграли. Первый запуск очереди нужно
+          // заполнить, иначе повтор-выключенный остановится сразу.
+          if (auto && repeatMode === 'off' && shuffleBagStartedRef.current) {
+            setIsPlaying(false);
+            return false;
+          }
+          bag = queue
+            .map((item) => item.id)
+            .filter((id) => !baseTrack || id !== baseTrack.id);
+          for (let i = bag.length - 1; i > 0; i -= 1) {
+            const j = Math.floor(Math.random() * (i + 1));
+            const temp = bag[i];
+            bag[i] = bag[j];
+            bag[j] = temp;
+          }
+        }
+
+        const nextId = bag.shift();
+        if (nextId) shuffleBagStartedRef.current = true;
+        shuffleBagRef.current = bag;
+        if (baseTrack) {
+          shuffleHistoryRef.current.push(baseTrack.id);
+          if (shuffleHistoryRef.current.length > 100) {
+            shuffleHistoryRef.current.shift();
+          }
+        }
+        nextIndex = queue.findIndex((item) => item.id === nextId);
+      }
+    } else if (index === -1) {
       nextIndex = direction > 0 ? 0 : queue.length - 1;
     } else {
       nextIndex = (index + direction + queue.length) % queue.length;
     }
-    await handlePlayTrack(queue[nextIndex]);
+
+    // Без повтора автопереход останавливается на последнем треке.
+    // Ручное переключение по-прежнему зациклено.
+    if (
+      auto &&
+      direction > 0 &&
+      repeatMode === 'off' &&
+      !shuffle &&
+      index === queue.length - 1
+    ) {
+      setIsPlaying(false);
+      return false;
+    }
+
+    return handlePlayTrack(queue[nextIndex]);
   };
 
   nextTrackRef.current = (sourceRequest) => {
     // Старый трек не должен запускать автопереход, если пользователь уже
     // выбрал другой, и пока новый трек ещё загружается.
     if (sourceRequest && sourceRequest !== playRequestRef.current) return;
-    if (!selectingTrackRef.current) playAdjacent(1);
+    if (!selectingTrackRef.current) playAdjacent(1, { auto: true });
   };
 
   const togglePlayback = async () => {
@@ -1063,7 +1228,7 @@ export default function App() {
           <View style={styles.header}>
             <Text style={styles.appTitle}>🎧 SONOR</Text>
             <Text style={styles.subtitle}>VK • Яндекс • Spotify • Audius</Text>
-            <Text style={styles.version}>MOBILE 1.8.1 · SYNCED LYRICS</Text>
+            <Text style={styles.version}>MOBILE 1.9.0 · SHUFFLE + REPEAT</Text>
           </View>
 
           <View style={styles.statsRow}>
@@ -1174,6 +1339,10 @@ export default function App() {
               lyricsOpen={showLyrics}
               position={position}
               duration={duration}
+              shuffle={shuffle}
+              repeatMode={repeatMode}
+              onToggleShuffle={toggleShuffle}
+              onCycleRepeat={cycleRepeat}
             />
           </View>
         )}

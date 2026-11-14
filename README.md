@@ -29,7 +29,7 @@
 - ⬆️ Автообновление через GitHub Releases: новая версия скачивается в фоне и ставится одним кликом
 - ▶️ Полный плеер: play/pause, следующий/предыдущий, перемотка, громкость, автопереход
 - 🎤 **Синхронизированные тексты песен** из открытой базы LRCLib: подсветка текущей строки, переход по строке, задержка ±0,5 с — на ПК и телефоне
-- 🔀 Перемешивание и повтор (очереди или одного трека) с сохранением состояния между запусками
+- 🔀 Перемешивание и повтор (очереди или одного трека) на ПК и телефоне с сохранением состояния между запусками
 - ⌨️ Горячие клавиши: Space, ←/→ — перемотка, ↑/↓ — громкость, M — звук, S — перемешать, R — повтор, L — текст песни, Ctrl+F — поиск
 - 🎛️ Управление медиаклавишами и системный «сейчас играет» через Media Session API
 - 🛟 Автопереход на следующий трек, если ссылка недоступна, и один повтор со свежей ссылкой для Яндекс Музыки
@@ -48,9 +48,9 @@
 
 | Платформа | Файл | Где взять |
 |---|---|---|
-| Windows (установщик) | `Sonor-Setup-1.8.1.exe` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` после сборки |
-| Windows (портативная) | `Sonor-Music-Player-1.8.1-win.zip` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` |
-| Android (APK) | `Sonor-1.8.1.apk` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или артефакт workflow **Build Android APK** |
+| Windows (установщик) | `Sonor-Setup-1.9.0.exe` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` после сборки |
+| Windows (портативная) | `Sonor-Music-Player-1.9.0-win.zip` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или папка `release/` |
+| Android (APK) | `Sonor-1.9.0.apk` | [GitHub Releases](https://github.com/MyNameIsNikki/Sonor/releases/latest) или артефакт workflow **Build Android APK** |
 | iOS | `.ipa` | только через EAS Build (нужен Apple Developer) |
 
 > Для телефонов собирается **APK** (Android) — формат установочного файла для мобильных. `.exe` — это формат Windows, на телефоне он не запускается.
@@ -58,7 +58,7 @@
 ### GitHub Actions
 
 - **CI** — запускается на каждый push/PR автоматически: юнит-тесты + смоук-сборка установщика.
-- **Release** — тег `git tag v1.8.1 && git push --tags` собирает установщик и публикует черновик релиза с `latest.yml` и `.blockmap` — артефактами автообновления.
+- **Release** — тег `git tag v1.9.0 && git push --tags` собирает установщик и публикует черновик релиза с `latest.yml` и `.blockmap` — артефактами автообновления.
 - **Build Android APK** — `Actions → Build Android APK → Run workflow`. Готовый APK появится в артефактах workflow (`sonor-apk`).
 - **Build Windows Installer** — `Actions → Build Windows Installer → Run workflow`. Установщик и ZIP появятся в артефактах (`sonor-windows-setup`).
 
@@ -66,7 +66,7 @@
 
 ```bash
 npm install --legacy-peer-deps
-npm test               # юнит-тесты (39 тестов: парсеры, санитайзеры, импортёры, тексты)
+npm test               # юнит-тесты (41 тест: парсеры, санитайзеры, импортёры, тексты)
 npm start              # Expo dev server (телефон / веб)
 npm run start:desktop  # Electron-приложение на компьютере
 ```
@@ -91,8 +91,8 @@ npm run build:windows
 
 Результат:
 
-- `release/Sonor-Setup-1.8.1.exe` — установщик с выбором папки, ярлыками на рабочем столе и в меню «Пуск»
-- `release/Sonor Music Player-1.8.1-win.zip` — портативная версия
+- `release/Sonor-Setup-1.9.0.exe` — установщик с выбором папки, ярлыками на рабочем столе и в меню «Пуск»
+- `release/Sonor Music Player-1.9.0-win.zip` — портативная версия
 - `release/win-unpacked/` — распакованное приложение
 
 Сборка не подписывается сертификатом (в конфиге `signAndEditExecutable: false`), поэтому Windows SmartScreen может показать предупреждение «Неизвестный издатель» — это нормально для неподписанных сборок. В метаданных файлов и установщика издатель указан как **ANV**; чтобы Windows показывала имя издателя без предупреждения, нужен платный сертификат подписи кода.

@@ -24,7 +24,11 @@ const PlayerControls = ({
   onOpenLyrics,
   lyricsOpen = false,
   position = 0,
-  duration = 0
+  duration = 0,
+  shuffle = false,
+  repeatMode = 'all',
+  onToggleShuffle,
+  onCycleRepeat
 }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const barWidth = useRef(0);
@@ -142,6 +146,17 @@ const PlayerControls = ({
 
       <View style={styles.controlsContainer}>
         <TouchableOpacity
+          style={[styles.modeBtn, shuffle && styles.modeBtnActive]}
+          onPress={onToggleShuffle}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={shuffle ? 'Выключить перемешивание' : 'Включить перемешивание'}
+          accessibilityState={{ selected: shuffle }}
+        >
+          <Text style={[styles.modeIcon, shuffle && styles.modeIconActive]}>⇄</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={styles.controlBtn}
           onPress={onPrevious}
           accessibilityRole="button"
@@ -173,7 +188,42 @@ const PlayerControls = ({
         >
           <Text style={styles.controlIcon}>⏭</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.modeBtn, repeatMode !== 'off' && styles.modeBtnActive]}
+          onPress={onCycleRepeat}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={
+            repeatMode === 'one'
+              ? 'Повтор одного трека включён'
+              : repeatMode === 'all'
+                ? 'Повтор всех треков включён'
+                : 'Повтор выключен'
+          }
+          accessibilityHint="Переключает режим повтора"
+          accessibilityState={{ selected: repeatMode !== 'off' }}
+        >
+          <Text style={[styles.modeIcon, repeatMode !== 'off' && styles.modeIconActive]}>
+            ↻
+          </Text>
+          {repeatMode === 'one' ? (
+            <View style={styles.repeatBadge}>
+              <Text style={styles.repeatBadgeText}>1</Text>
+            </View>
+          ) : null}
+        </TouchableOpacity>
       </View>
+
+      <Text style={styles.modeStatus}>
+        {shuffle ? 'Перемешивание' : 'По порядку'}
+        {' · '}
+        {repeatMode === 'one'
+          ? 'Повтор трека'
+          : repeatMode === 'all'
+            ? 'Повтор всех'
+            : 'Без повтора'}
+      </Text>
     </Animated.View>
   );
 };
@@ -298,7 +348,46 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 26
+    gap: 10
+  },
+  modeBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)'
+  },
+  modeBtnActive: {
+    backgroundColor: 'rgba(34, 211, 238, 0.16)',
+    borderColor: 'rgba(34, 211, 238, 0.42)'
+  },
+  modeIcon: {
+    fontSize: 17,
+    color: '#7fa6b8',
+    fontWeight: '700'
+  },
+  modeIconActive: {
+    color: '#22d3ee'
+  },
+  repeatBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    minWidth: 14,
+    height: 14,
+    borderRadius: 7,
+    paddingHorizontal: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#22d3ee'
+  },
+  repeatBadgeText: {
+    color: '#04161c',
+    fontSize: 8.5,
+    fontWeight: '900'
   },
   controlBtn: {
     width: 42,
@@ -328,6 +417,13 @@ const styles = StyleSheet.create({
   controlIcon: {
     fontSize: 17,
     color: '#eaf6fb'
+  },
+  modeStatus: {
+    marginTop: 8,
+    textAlign: 'center',
+    fontSize: 9.5,
+    color: '#6f95a6',
+    letterSpacing: 0.15
   },
   playIcon: {
     fontSize: 23,

@@ -1,6 +1,6 @@
 {
   "name": "Sonor",
-  "version": "1.8.1",
+  "version": "1.9.0",
   "description": "Music player with VK, Yandex and Spotify import, free music, synced lyrics and secure OAuth in a blue theme",
   "main": "node_modules/expo/AppEntry.js",
   "author": "ANV",
