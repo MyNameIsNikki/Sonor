@@ -58,7 +58,7 @@
 ### GitHub Actions
 
 - **CI** — запускается на каждый push/PR автоматически: юнит-тесты + смоук-сборка установщика.
-- **Release** — тег `git tag v1.9.0 && git push --tags` собирает установщик и публикует черновик релиза с `latest.yml` и `.blockmap` — артефактами автообновления.
+- **Release candidate** — `Actions → Release candidate → Run workflow`: тесты и сборка установщика; файлы появятся в артефакте `sonor-windows-release`. Публикация выполняется вручную после проверки, чтобы CI не перезаписывал уже опубликованные файлы и их контрольные суммы.
 - **Build Android APK** — `Actions → Build Android APK → Run workflow`. Готовый APK появится в артефактах workflow (`sonor-apk`).
 - **Build Windows Installer** — `Actions → Build Windows Installer → Run workflow`. Установщик и ZIP появятся в артефактах (`sonor-windows-setup`).
 
@@ -96,6 +96,8 @@ npm run build:windows
 - `release/win-unpacked/` — распакованное приложение
 
 Сборка не подписывается сертификатом (в конфиге `signAndEditExecutable: false`), поэтому Windows SmartScreen может показать предупреждение «Неизвестный издатель» — это нормально для неподписанных сборок. В метаданных файлов и установщика издатель указан как **ANV**; чтобы Windows показывала имя издателя без предупреждения, нужен платный сертификат подписи кода.
+
+Локальная команда `npm run build:windows` собирает файлы с `--publish never`: она никогда не публикует релиз и не может перезаписать уже проверенные ассеты на GitHub.
 
 ### Android
 

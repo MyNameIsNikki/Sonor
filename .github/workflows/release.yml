@@ -1,16 +1,11 @@
-name: Release
+name: Release candidate
 
 on:
-  push:
-    tags:
-      - 'v*'
-
-permissions:
-  contents: write
+  workflow_dispatch:
 
 jobs:
   release:
-    name: Build and publish release
+    name: Build and test release candidate
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -29,20 +24,20 @@ jobs:
         run: npm test
 
       - name: Build Windows installer
-        run: npx electron-builder --win --config electron-builder.config.js
+        run: npx electron-builder --win --config electron-builder.config.js --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # latest.yml и *.blockmap обязательны: electron-updater проверяет их
-      # при автообновлении через GitHub Releases.
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+      # latest.yml и *.blockmap обязательны для автообновления. Публикацию
+      # выполняет человек после проверки: автоматическая публикация по тегу
+      # отключена, чтобы CI не перезаписывал уже проверенные файлы релиза.
+      - name: Upload release candidate
+        uses: actions/upload-artifact@v4
         with:
-          files: |
+          name: sonor-windows-release
+          path: |
             release/*.exe
             release/*.zip
             release/*.blockmap
             release/latest.yml
-          draft: true
-          generate_release_notes: true
+          if-no-files-found: error

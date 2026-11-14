@@ -13,9 +13,9 @@
     "web": "expo start --web",
     "build:android": "eas build -p android --profile preview",
     "build:ios": "eas build -p ios --profile preview",
-    "build:windows": "electron-builder --win --config electron-builder.config.js",
+    "build:windows": "electron-builder --win --config electron-builder.config.js --publish never",
     "start:desktop": "electron electron-main.js",
-    "make:exe": "electron-builder --win --config electron-builder.config.js"
+    "make:exe": "electron-builder --win --config electron-builder.config.js --publish never"
   },
   "dependencies": {
     "electron-updater": "^6.8.11",
