@@ -10,15 +10,26 @@ module.exports = {
   files: [
     '!**/*',
     'electron-main.js',
+    'preload.js',
     'main.js',
     'index.html',
     'package.json',
     'App.js',
     'src/**/*',
-    'icon.png'
+    'icon.png',
+    // Продакш-зависимости главного процесса (electron-updater, music-metadata
+    // и их транзитивные модули). Dev-зависимости (expo, react-native) не
+    // попадают: electron-builder кладёт в пакет только дерево dependencies.
+    'node_modules/**/*'
   ],
   extraMetadata: {
     main: 'electron-main.js'
+  },
+  // Автообновление через GitHub Releases (electron-updater читает latest.yml)
+  publish: {
+    provider: 'github',
+    owner: 'MyNameIsNikki',
+    repo: 'Sonor'
   },
   // Never require code signing for local builds
   forceCodeSigning: false,

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <!-- Фирменный фон: глубокий тёмно-синий с циановым свечением -->
+    <radialGradient id="bgGlow" cx="30%" cy="18%" r="90%">
+      <stop offset="0%" stop-color="#0f3d4d"/>
+      <stop offset="55%" stop-color="#0a2430"/>
+      <stop offset="100%" stop-color="#06141b"/>
+    </radialGradient>
+    <linearGradient id="noteGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7deefd"/>
+      <stop offset="55%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity=".10"/>
+      <stop offset="45%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Скруглённый квадрат -->
+  <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#bgGlow)"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#sheen)"/>
+
+  <!-- Мягкое свечение за нотой -->
+  <ellipse cx="500" cy="540" rx="330" ry="330" fill="#22d3ee" opacity=".14"/>
+
+  <!-- Нота (восьмая) в фирменном градиенте -->
+  <g transform="translate(104,104) scale(34)">
+    <path fill="url(#noteGrad)" d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+  </g>
+</svg>

@@ -1,6 +1,6 @@
-// Player controls with live progress and previous/next navigation
+// Player controls with live progress, tap-to-seek and a lyrics shortcut
 import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable, StyleSheet, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const SOURCE_LABELS = {
@@ -20,10 +20,14 @@ const PlayerControls = ({
   onToggle,
   onNext,
   onPrevious,
+  onSeek,
+  onOpenLyrics,
+  lyricsOpen = false,
   position = 0,
   duration = 0
 }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const barWidth = useRef(0);
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -41,6 +45,13 @@ const PlayerControls = ({
     const mins = Math.floor(totalSeconds / 60);
     const secs = totalSeconds % 60;
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  const handleSeek = (event) => {
+    if (!onSeek || !total || !barWidth.current) return;
+    const x = event && event.nativeEvent ? event.nativeEvent.locationX : 0;
+    const ratio = Math.max(0, Math.min(1, x / barWidth.current));
+    onSeek(Math.round(ratio * total));
   };
 
   return (
@@ -69,12 +80,32 @@ const PlayerControls = ({
             </Text>
           ) : null}
         </View>
+        <TouchableOpacity
+          style={[styles.lyricsBtn, lyricsOpen && styles.lyricsBtnActive]}
+          onPress={onOpenLyrics}
+          activeOpacity={0.82}
+          accessibilityRole="button"
+          accessibilityLabel="Текст песни"
+        >
+          <Text style={[styles.lyricsBtnText, lyricsOpen && styles.lyricsBtnTextActive]}>Aa</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.progressSection}>
-        <View style={styles.progressBarBg}>
-          <View style={[styles.progressFill, { width: `${progress}%` }]} />
-        </View>
+        <Pressable
+          style={styles.progressTouch}
+          onLayout={(event) => {
+            barWidth.current = event.nativeEvent.layout.width;
+          }}
+          onPress={handleSeek}
+          hitSlop={10}
+          accessibilityRole="adjustable"
+          accessibilityLabel="Позиция трека"
+        >
+          <View style={styles.progressBarBg}>
+            <View style={[styles.progressFill, { width: `${progress}%` }]} />
+          </View>
+        </Pressable>
         <View style={styles.timeContainer}>
           <Text style={styles.timeText}>{formatTime(position)}</Text>
           <Text style={styles.timeText}>{formatTime(total)}</Text>
@@ -134,6 +165,30 @@ const styles = StyleSheet.create({
   trackDetails: {
     flex: 1
   },
+  lyricsBtn: {
+    width: 36,
+    height: 36,
+    flex: 0,
+    borderRadius: 12,
+    backgroundColor: 'rgba(34, 211, 238, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(34, 211, 238, 0.22)',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  lyricsBtnActive: {
+    backgroundColor: '#22d3ee',
+    borderColor: '#22d3ee'
+  },
+  lyricsBtnText: {
+    color: '#22d3ee',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.4
+  },
+  lyricsBtnTextActive: {
+    color: '#04161c'
+  },
   trackTitle: {
     fontSize: 15,
     fontWeight: '700',
@@ -167,7 +222,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden'
   },
   progressSection: {
-    marginBottom: 12
+    marginBottom: 8
+  },
+  progressTouch: {
+    paddingVertical: 8,
+    marginTop: -6
   },
   progressBarBg: {
     height: 4,

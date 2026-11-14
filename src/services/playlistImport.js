@@ -293,10 +293,11 @@ function parseJson(raw) {
 
 function detectFormat(filePath, raw) {
   const ext = path.extname(filePath).toLowerCase();
-  if (ext === '.json' || /^\s*[\[{]/.test(raw)) return 'json';
-  if (ext === '.csv' || ext === '.tsv') return 'csv';
+  // PLS начинается с «[» — проверяем его раньше JSON
   if (ext === '.xspf' || /<playlist\b/i.test(raw)) return 'xspf';
   if (ext === '.pls' || /^\s*\[playlist\]/i.test(raw)) return 'pls';
+  if (ext === '.json' || /^\s*[\[{]/.test(raw)) return 'json';
+  if (ext === '.csv' || ext === '.tsv') return 'csv';
   if (ext === '.m3u' || ext === '.m3u8' || /^\s*#EXTM3U/i.test(raw)) return 'm3u';
   if (/^[^\n]*[,;\t][^\n]*\n/.test(raw)) return 'csv';
   throw new Error('Не удалось распознать формат. Поддерживаются M3U, M3U8, PLS, XSPF, CSV и JSON');
@@ -399,7 +400,7 @@ function importPlaylistFile(filePath) {
   let entries;
   if (format === 'json') entries = parseJson(raw);
   else if (format === 'csv') entries = parseCsv(raw);
-  else if (format === 'xspf') entries = parseXspf(raw);
+  else if (format === 'xspf') entries = parseXSPF(raw);
   else if (format === 'pls') entries = parsePLS(raw);
   else entries = parseM3U(raw);
 

@@ -18,6 +18,7 @@ import * as FileSystem from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 import MusicImporter from './src/components/MusicImporter';
 import PlayerControls from './src/components/PlayerControls';
+import LyricsPanel from './src/components/LyricsPanel';
 import TrackList from './src/components/TrackList';
 import CollectionGrid from './src/components/CollectionGrid';
 import FreeMusic from './src/components/FreeMusic';
@@ -65,6 +66,7 @@ export default function App() {
   const [tracks, setTracks] = useState([]);
   const [collections, setCollections] = useState([]);
   const [showImport, setShowImport] = useState(false);
+  const [showLyrics, setShowLyrics] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const [activeTab, setActiveTab] = useState('all');
@@ -538,6 +540,17 @@ export default function App() {
     }
   };
 
+  const seekTo = async (milliseconds) => {
+    if (!sound) return;
+    const value = Math.max(0, Number(milliseconds) || 0);
+    try {
+      await sound.setPositionAsync(value);
+      setPosition(value);
+    } catch (error) {
+      console.log('Не удалось перейти к моменту трека:', error.message);
+    }
+  };
+
   const handleImportComplete = async (result, service, token, remember = true) => {
     const effectiveToken = (token || '').trim() || tokensRef.current[service] || '';
     if (effectiveToken) tokensRef.current[service] = effectiveToken;
@@ -755,7 +768,7 @@ export default function App() {
           <View style={styles.header}>
             <Text style={styles.appTitle}>🎧 SONOR</Text>
             <Text style={styles.subtitle}>VK • Яндекс • Spotify • Audius</Text>
-            <Text style={styles.version}>MOBILE 1.5.1 · SECURE OAUTH</Text>
+            <Text style={styles.version}>MOBILE 1.8.0 · SYNCED LYRICS</Text>
           </View>
 
           <View style={styles.statsRow}>
@@ -861,11 +874,22 @@ export default function App() {
               onToggle={togglePlayback}
               onNext={() => playAdjacent(1)}
               onPrevious={() => playAdjacent(-1)}
+              onSeek={seekTo}
+              onOpenLyrics={() => setShowLyrics(true)}
+              lyricsOpen={showLyrics}
               position={position}
               duration={duration}
             />
           </View>
         )}
+
+        <LyricsPanel
+          visible={showLyrics}
+          track={currentTrack}
+          position={position}
+          onClose={() => setShowLyrics(false)}
+          onSeek={seekTo}
+        />
       </SafeAreaView>
     </LinearGradient>
   );

@@ -207,7 +207,18 @@ function postForm(targetUrl, form) {
 function oauthError(response, fallback) {
   const json = response && response.json;
   if (json && (json.error_description || json.error)) {
-    return String(json.error_description || json.error);
+    const raw = String(json.error_description || json.error);
+    // Частые случаи — сразу говорим, что делать
+    if (json.error === 'invalid_client' || /client not found/i.test(raw)) {
+      return 'Приложение не найдено: проверьте Client ID (и что приложение включено в личном кабинете).';
+    }
+    if (json.error === 'unauthorized_client') {
+      return 'Приложению запрещён этот тип входа: включите «Device flow» / веб-платформу в настройках приложения.';
+    }
+    if (json.error === 'invalid_grant') {
+      return 'Код входа недействителен или устарел — начните вход заново.';
+    }
+    return raw;
   }
   const text = response && response.text ? response.text.replace(/\s+/g, ' ').slice(0, 180) : '';
   return fallback + (text ? ' (' + text + ')' : '');

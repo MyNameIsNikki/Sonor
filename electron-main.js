@@ -1,41 +1,124 @@
 const { app, BrowserWindow, ipcMain, Menu, screen, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { importService, importPublicLink, resolveYandexStream, checkToken } = require('./src/services/importers');
+const crypto = require('crypto');
+const { importService, importPublicLink, resolveYandexStream, resolveSpotifyPreview, checkToken } = require('./src/services/importers');
 const { searchFreeMusic, resolveAudiusStream, downloadFreeTrack } = require('./src/services/freeMusic');
 const { importPlaylistFile } = require('./src/services/playlistImport');
 const tokenStore = require('./src/services/tokenStore');
 const oauth = require('./src/services/oauth');
+const libraryStore = require('./src/services/libraryStore');
+const { lookupLyrics } = require('./src/services/lyrics');
 
 // Стабильная папка данных: не зависит от имени исполняемого файла и
 // productName в установщике, поэтому библиотека переживает обновления.
+// SONOR_DATA_DIR задаёт свою папку — портативный режим и тесты.
 app.setName('Sonor');
-const dataRoot = path.join(app.getPath('appData'), 'Sonor');
+const dataRoot = process.env.SONOR_DATA_DIR
+  ? path.resolve(process.env.SONOR_DATA_DIR)
+  : path.join(app.getPath('appData'), 'Sonor');
 app.setPath('userData', dataRoot);
 
 let mainWindow;
+
+// Один экземпляр приложения: повторный запуск открывает существующее окно.
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+}
 
 // Рабочая копия токенов в памяти. На диск они попадают только по желанию
 // пользователя — в зашифрованном виде через tokenStore.
 const importTokens = new Map();
 
+// ---------- Позиция окна переживает перезапуск ----------
+function windowStateFile() {
+  return path.join(dataRoot, 'window-state.json');
+}
+
+function loadWindowState() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(windowStateFile(), 'utf8'));
+    if (!raw || typeof raw.width !== 'number' || typeof raw.height !== 'number') return null;
+    return raw;
+  } catch (err) {
+    return null;
+  }
+}
+
+function saveWindowState(win) {
+  if (!win || win.isMinimized() || win.isDestroyed()) return;
+  try {
+    const bounds = win.getBounds();
+    fs.mkdirSync(dataRoot, { recursive: true });
+    fs.writeFileSync(windowStateFile(), JSON.stringify(bounds), 'utf8');
+  } catch (err) { /* не критично */ }
+}
+
+// Меню скрыто (autoHideMenuBar), но именно оно даёт рабочие Ctrl+C / Ctrl+V /
+// Ctrl+Z / Ctrl+A в полях ввода — без него вставка токенов не работает.
+function installMenu() {
+  const template = [
+    {
+      label: 'Правка',
+      submenu: [
+        { role: 'undo', label: 'Отменить' },
+        { role: 'redo', label: 'Повторить' },
+        { type: 'separator' },
+        { role: 'cut', label: 'Вырезать' },
+        { role: 'copy', label: 'Копировать' },
+        { role: 'paste', label: 'Вставить' },
+        { role: 'selectAll', label: 'Выделить всё' }
+      ]
+    },
+    {
+      label: 'Вид',
+      submenu: [
+        { role: 'reload', label: 'Перезагрузить' },
+        { role: 'forceReload', label: 'Перезагрузить принудительно' },
+        { role: 'toggleDevTools', label: 'Инструменты разработчика' },
+        { type: 'separator' },
+        { role: 'resetZoom', label: 'Масштаб 100%' },
+        { role: 'zoomIn', label: 'Увеличить' },
+        { role: 'zoomOut', label: 'Уменьшить' },
+        { type: 'separator' },
+        { role: 'togglefullscreen', label: 'Во весь экран' }
+      ]
+    },
+    {
+      label: 'Окно',
+      submenu: [
+        { role: 'minimize', label: 'Свернуть' },
+        { role: 'zoom', label: 'Развернуть' },
+        { role: 'close', label: 'Закрыть' }
+      ]
+    }
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 function createWindow() {
   const workArea = screen.getPrimaryDisplay().workAreaSize;
-  const width = Math.min(1280, Math.max(900, workArea.width - 48));
-  const height = Math.min(820, Math.max(620, workArea.height - 48));
+  const saved = loadWindowState();
+  const width = saved ? Math.min(saved.width, workArea.width) : Math.min(1280, Math.max(900, workArea.width - 48));
+  const height = saved ? Math.min(saved.height, workArea.height) : Math.min(820, Math.max(620, workArea.height - 48));
 
   mainWindow = new BrowserWindow({
     width: width,
     height: height,
+    x: saved && typeof saved.x === 'number' ? saved.x : undefined,
+    y: saved && typeof saved.y === 'number' ? saved.y : undefined,
     minWidth: 900,
     minHeight: 620,
-    center: true,
+    center: !saved,
     backgroundColor: '#0f2027',
     autoHideMenuBar: true,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      webSecurity: false
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: false
     },
     frame: false,
     titleBarStyle: 'hidden',
@@ -43,7 +126,7 @@ function createWindow() {
     icon: path.join(__dirname, 'icon.png')
   });
 
-  Menu.setApplicationMenu(null);
+  installMenu();
 
   mainWindow.once('ready-to-show', () => {
     if (!mainWindow) return;
@@ -58,6 +141,10 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, 'index.html'));
   }
+
+  mainWindow.on('close', () => {
+    saveWindowState(mainWindow);
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -99,12 +186,21 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+  setupAutoUpdater();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
   });
+});
+
+// Второй запуск приложения — выводим существующее окно на передний план
+app.on('second-instance', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
 });
 
 app.on('window-all-closed', () => {
@@ -287,57 +383,17 @@ function libraryFile() {
 }
 
 function emptyLibrary() {
-  return { tracks: [], collections: [], savedAt: null };
+  return { tracks: [], collections: [], stats: emptyStats(), savedAt: null };
 }
 
-function sanitizeTrack(track) {
-  if (!track || !track.id) return null;
-  return {
-    id: String(track.id),
-    externalId: track.externalId ? String(track.externalId) : null,
-    title: String(track.title || 'Без названия'),
-    artist: String(track.artist || 'Неизвестный исполнитель'),
-    album: String(track.album || ''),
-    duration: Number(track.duration) || 0,
-    url: track.url || null,
-    path: track.path ? String(track.path) : null,
-    image: track.image || null,
-    source: String(track.source || ''),
-    provider: track.provider ? String(track.provider) : null,
-    origin: track.origin ? String(track.origin) : null,
-    public: track.public === true,
-    license: track.license ? String(track.license).slice(0, 240) : null,
-    licenseUrl: track.licenseUrl ? String(track.licenseUrl) : null,
-    filePageUrl: track.filePageUrl ? String(track.filePageUrl) : null,
-    downloadable: track.downloadable === true,
-    streamOnly: track.streamOnly === true
-  };
-}
-
-function sanitizeCollection(collection) {
-  if (!collection || !collection.id) return null;
-  return {
-    id: String(collection.id),
-    source: String(collection.source || ''),
-    type: String(collection.type || 'playlist'),
-    title: String(collection.title || 'Без названия'),
-    subtitle: String(collection.subtitle || ''),
-    image: collection.image || null,
-    trackIds: Array.isArray(collection.trackIds)
-      ? collection.trackIds.slice(0, 20000).map(String)
-      : []
-  };
-}
+// Санитайзеры вынесены в src/services/libraryStore.js — их тестирует node --test.
+const sanitizeTrack = libraryStore.sanitizeTrack;
+const sanitizeCollection = libraryStore.sanitizeCollection;
+const sanitizeStats = libraryStore.sanitizeStats;
+const emptyStats = libraryStore.emptyStats;
 
 function sanitizeLibrary(input) {
-  const data = input && typeof input === 'object' ? input : {};
-  const tracks = Array.isArray(data.tracks)
-    ? data.tracks.slice(0, 20000).map(sanitizeTrack).filter(Boolean)
-    : [];
-  const collections = Array.isArray(data.collections)
-    ? data.collections.slice(0, 2000).map(sanitizeCollection).filter(Boolean)
-    : [];
-  return { version: 1, tracks: tracks, collections: collections, savedAt: new Date().toISOString() };
+  return libraryStore.sanitizeLibrary(input);
 }
 
 function readLibrary() {
@@ -350,6 +406,7 @@ function readLibrary() {
       collections: Array.isArray(parsed.collections)
         ? parsed.collections.map(sanitizeCollection).filter(Boolean)
         : [],
+      stats: sanitizeStats(parsed.stats),
       savedAt: parsed.savedAt || null
     };
   } catch (err) {
@@ -378,6 +435,142 @@ ipcMain.handle('save-library', async (event, payload) => {
     console.error('Не удалось сохранить библиотеку:', err.message);
     return { ok: false, error: err.message };
   }
+});
+
+// ---------- Теги и обложки локальных файлов ----------
+let mm = null;
+function musicMetadata() {
+  if (!mm) mm = require('music-metadata');
+  return mm;
+}
+
+function coversDir() {
+  return path.join(app.getPath('userData'), 'covers');
+}
+
+// Обложка сохраняется на диск один раз — путь стабилен по содержимому файла
+async function saveCover(pictures) {
+  const list = (Array.isArray(pictures) ? pictures : []).filter(function (pic) {
+    return pic && pic.data && pic.data.length;
+  });
+  if (!list.length) return null;
+  const pic = list.reduce(function (best, item) {
+    return !best || item.data.length > best.data.length ? item : best;
+  }, null);
+
+  const dir = coversDir();
+  await fs.promises.mkdir(dir, { recursive: true });
+  const hash = crypto.createHash('sha1').update(pic.data).digest('hex').slice(0, 24);
+  const extension = /png/i.test(String(pic.format)) ? '.png' : '.jpg';
+  const file = path.join(dir, hash + extension);
+  try {
+    await fs.promises.access(file);
+  } catch (err) {
+    await fs.promises.writeFile(file, pic.data);
+  }
+  return file;
+}
+
+function withTimeout(promise, ms) {
+  return new Promise(function (resolve) {
+    const timer = setTimeout(function () { resolve(null); }, ms);
+    promise.then(function (value) {
+      clearTimeout(timer);
+      resolve(value);
+    }, function () {
+      clearTimeout(timer);
+      resolve(null);
+    });
+  });
+}
+
+async function readOneTags(audioPath) {
+  try {
+    if (!fs.existsSync(audioPath) || !fs.statSync(audioPath).isFile()) return { ok: false };
+    const metadata = await withTimeout(musicMetadata().parseFile(audioPath, { duration: true, skipCovers: false }), 10000);
+    if (!metadata) return { ok: false };
+    const common = metadata.common || {};
+    const coverPath = await saveCover(common.picture);
+    return {
+      ok: true,
+      title: text2(common.title) || null,
+      artist: text2(common.artist) || (common.artists && common.artists[0]) || null,
+      album: text2(common.album) || null,
+      duration: metadata.format && isFinite(metadata.format.duration) ? Math.round(metadata.format.duration) : null,
+      year: common.year || null,
+      genre: common.genre && common.genre[0] ? common.genre[0] : null,
+      coverPath: coverPath
+    };
+  } catch (err) {
+    return { ok: false };
+  }
+}
+
+function text2(value) {
+  return value === undefined || value === null ? '' : String(value).trim();
+}
+
+ipcMain.handle('read-audio-tags', async (event, payload) => {
+  const paths = (payload && Array.isArray(payload.paths) ? payload.paths : [])
+    .slice(0, 500)
+    .map(function (value) { return String(value || ''); })
+    .filter(Boolean);
+  if (!paths.length) return { results: [] };
+
+  const results = new Array(paths.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < paths.length) {
+      const index = cursor++;
+      results[index] = await readOneTags(paths[index]);
+    }
+  }
+  const workers = [];
+  for (let i = 0; i < Math.min(4, paths.length); i++) workers.push(worker());
+  await Promise.all(workers);
+  return { results: results };
+});
+
+// ---------- Автообновление (GitHub Releases) ----------
+function setupAutoUpdater() {
+  if (!app.isPackaged) return;
+  let autoUpdater;
+  try {
+    ({ autoUpdater } = require('electron-updater'));
+  } catch (err) {
+    console.error('electron-updater недоступен:', err.message);
+    return;
+  }
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  function notify(status, info) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-status', { status: status, info: info || null });
+    }
+  }
+
+  autoUpdater.on('checking-for-update', function () { notify('checking'); });
+  autoUpdater.on('update-available', function (info) { notify('available', info); });
+  autoUpdater.on('update-not-available', function () { notify('none'); });
+  autoUpdater.on('error', function (err) { notify('error', { message: err && err.message ? err.message : String(err) }); });
+  autoUpdater.on('download-progress', function (progress) {
+    notify('downloading', { percent: Math.round(progress.percent || 0) });
+  });
+  autoUpdater.on('update-downloaded', function (info) { notify('downloaded', info); });
+
+  setTimeout(function () { autoUpdater.checkForUpdates().catch(function () { /* нет сети — не мешаем */ }); }, 8000);
+}
+
+ipcMain.handle('install-update', async () => {
+  let autoUpdater;
+  try {
+    ({ autoUpdater } = require('electron-updater'));
+  } catch (err) {
+    return { ok: false, error: 'Модуль обновлений недоступен' };
+  }
+  autoUpdater.quitAndInstall(false, true);
+  return { ok: true };
 });
 
 // ---------- Import ----------
@@ -486,4 +679,32 @@ ipcMain.handle('resolve-track-url', async (event, payload) => {
 
   const url = await resolveYandexStream(String(id).replace(/^yandex_/, ''), token);
   return { url: url };
+});
+
+// 30-секундное превью Spotify: Web API больше не отдаёт preview_url,
+// берём его с публичной embed-страницы трека.
+ipcMain.handle('resolve-spotify-preview', async (event, payload) => {
+  const id = payload && payload.id;
+  if (!id) return { ok: false, error: 'Не указан идентификатор трека' };
+  try {
+    const info = await resolveSpotifyPreview(String(id));
+    return { ok: true, url: info.previewUrl, duration: info.duration };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
+// Тексты песен ищутся в открытой базе LRCLib и не зависят от источника трека.
+ipcMain.handle('lyrics-lookup', async (event, payload) => {
+  try {
+    return await lookupLyrics(payload || {});
+  } catch (err) {
+    return {
+      found: false,
+      synced: false,
+      lines: [],
+      plain: '',
+      error: err && err.message ? err.message : String(err)
+    };
+  }
 });

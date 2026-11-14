@@ -278,8 +278,25 @@ function vkApi(method, token, params) {
   });
   return getJson('https://api.vk.com/method/' + method + '?' + form.toString()).then(function (data) {
     if (data && data.error) {
-      const err = new Error(data.error.error_msg || data.error.error_message || 'Ошибка VK API');
-      err.code = data.error.error_code;
+      const code = data.error.error_code;
+      const raw = data.error.error_msg || data.error.error_message || 'Ошибка VK API';
+      let message = raw;
+      // Сырые коды VK ничего не говорят пользователю — переводим в действия
+      if (code === 5) {
+        message = 'VK: токен недействителен или истёк. Получите новый и попробуйте снова.';
+      } else if (code === 6 || code === 9 || code === 29) {
+        message = 'VK: слишком много запросов. Подождите пару минут и повторите импорт.';
+      } else if (code === 15 || code === 28) {
+        message = 'VK: у этого токена нет доступа к аудиозаписям. Создайте приложение типа Standalone с правом «Аудиозаписи» и войдите через него, либо получите токен вручную.';
+      } else if (code === 17) {
+        message = 'VK: требуется подтверждение входа. Войдите заново через кнопку OAuth.';
+      } else if (code === 20) {
+        message = 'VK: метод недоступен для приложений этого типа. Нужен токен приложения типа Standalone с правом «Аудиозаписи».';
+      } else if (code === 27) {
+        message = 'VK: доступ к аудио API закрыт для этого аккаунта по требованиям правообладателей.';
+      }
+      const err = new Error(message);
+      err.code = code;
       throw err;
     }
     return data ? data.response : null;
@@ -722,6 +739,65 @@ function spotifyEntryTrack(entry) {
   return entry.track || entry.item || null;
 }
 
+/* Spotify убрал preview_url из Web API для новых приложений — берём
+ * 30-секундное превью из публичной embed-страницы трека. */
+const spotifyPreviewCache = new Map();
+
+function spotifyEmbedEntity(html) {
+  const script = html.match(/<script[^>]+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+  if (!script) throw new Error('Spotify не вернул данные публичной страницы');
+
+  let entity;
+  try {
+    const data = JSON.parse(script[1]);
+    const pageProps = data && data.props && data.props.pageProps;
+    if (pageProps && pageProps.status) {
+      throw new Error(
+        'Spotify недоступен в вашем регионе (код ' + pageProps.status + '). ' +
+        'Попробуйте VPN или импорт с токеном.'
+      );
+    }
+    entity = pageProps && pageProps.state &&
+      pageProps.state.data && pageProps.state.data.entity;
+  } catch (err) {
+    if (err && err.message && err.message.indexOf('Spotify недоступен') === 0) throw err;
+    throw new Error('Не удалось разобрать ответ Spotify');
+  }
+  if (!entity) throw new Error('Публичная страница Spotify пуста или недоступна');
+  return entity;
+}
+
+async function resolveSpotifyPreview(trackId) {
+  const key = String(trackId || '').trim();
+  if (!key || !/^[A-Za-z0-9]+$/.test(key)) throw new Error('Некорректный идентификатор трека Spotify');
+  if (spotifyPreviewCache.has(key)) {
+    const cached = spotifyPreviewCache.get(key);
+    if (cached instanceof Error) throw cached;
+    return cached;
+  }
+
+  let result;
+  try {
+    const html = await requestRaw('https://open.spotify.com/embed/track/' + key, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36' }
+    });
+    const entity = spotifyEmbedEntity(html);
+    const preview = entity.audioPreview && entity.audioPreview.url ? entity.audioPreview.url : null;
+    if (!preview) throw new Error('У этого трека Spotify нет 30-секундного превью');
+    result = {
+      previewUrl: preview,
+      duration: entity.duration ? Math.round(entity.duration / 1000) : 0
+    };
+  } catch (err) {
+    // Ошибку запоминаем ненадолго, чтобы не долбить Spotify на каждый клик
+    spotifyPreviewCache.set(key, err instanceof Error ? err : new Error(String(err)));
+    setTimeout(function () { spotifyPreviewCache.delete(key); }, 60000);
+    throw err;
+  }
+  spotifyPreviewCache.set(key, result);
+  return result;
+}
+
 async function importSpotifyFull(token, builder) {
   builder.progress('account', 'Проверяем аккаунт Spotify…');
 
@@ -963,26 +1039,7 @@ async function importSpotifyPublicLink(link, builder) {
     headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36' }
   });
 
-  const script = html.match(/<script[^>]+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-  if (!script) throw new Error('Spotify не вернул данные публичной страницы');
-
-  let entity;
-  try {
-    const data = JSON.parse(script[1]);
-    const pageProps = data && data.props && data.props.pageProps;
-    if (pageProps && pageProps.status) {
-      throw new Error(
-        'Spotify недоступен в вашем регионе (код ' + pageProps.status + '). ' +
-        'Попробуйте VPN или импорт с токеном.'
-      );
-    }
-    entity = pageProps && pageProps.state &&
-      pageProps.state.data && pageProps.state.data.entity;
-  } catch (err) {
-    if (err && err.message && err.message.indexOf('Spotify недоступен') === 0) throw err;
-    throw new Error('Не удалось разобрать ответ Spotify');
-  }
-  if (!entity) throw new Error('Публичная страница Spotify пуста или недоступна');
+  const entity = spotifyEmbedEntity(html);
 
   const list = Array.isArray(entity.trackList) && entity.trackList.length
     ? entity.trackList
@@ -1271,6 +1328,17 @@ module.exports = {
   importService: importService,
   importPublicLink: importPublicLink,
   resolveYandexStream: resolveYandexStream,
+  resolveSpotifyPreview: resolveSpotifyPreview,
   checkToken: checkToken,
-  MAX_TRACKS: MAX_TRACKS
+  MAX_TRACKS: MAX_TRACKS,
+  // Внутренние помощники — наружу только для тестов (node --test tests/)
+  __testables: {
+    splitArtistTitle: splitArtistTitle,
+    nameFromUrl: nameFromUrl,
+    parseM3U: parseM3U,
+    parsePLS: parsePLS,
+    parseXSPF: parseXSPF,
+    spotifyEmbedEntity: spotifyEmbedEntity,
+    yandexImage: yandexImage
+  }
 };

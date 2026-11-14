@@ -508,14 +508,31 @@ async function searchFreeMusic(query, source) {
   const selected = SOURCES.indexOf(source) !== -1 ? source : 'all';
   const jobs = [];
 
+  // Медленный источник не должен задерживать остальные: дедлайн на каталог.
+  const DEADLINE = 20000;
+  function withDeadline(label, promise) {
+    return new Promise(function (resolve, reject) {
+      const timer = setTimeout(function () {
+        reject(new Error('не ответил за ' + Math.round(DEADLINE / 1000) + ' с — попробуйте ещё раз'));
+      }, DEADLINE);
+      promise.then(function (value) {
+        clearTimeout(timer);
+        resolve(value);
+      }, function (err) {
+        clearTimeout(timer);
+        reject(err);
+      });
+    });
+  }
+
   if (selected === 'all' || selected === 'audius') {
-    jobs.push({ key: 'audius', run: function () { return audiusSearch(cleaned, 18); } });
+    jobs.push({ key: 'audius', run: function () { return withDeadline('Audius', audiusSearch(cleaned, 18)); } });
   }
   if (selected === 'all' || selected === 'ccmixter') {
-    jobs.push({ key: 'ccmixter', run: function () { return ccmixterSearch(cleaned, 18); } });
+    jobs.push({ key: 'ccmixter', run: function () { return withDeadline('ccMixter', ccmixterSearch(cleaned, 18)); } });
   }
   if (selected === 'all' || selected === 'archive') {
-    jobs.push({ key: 'archive', run: function () { return archiveSearch(cleaned, 6); } });
+    jobs.push({ key: 'archive', run: function () { return withDeadline('Internet Archive', archiveSearch(cleaned, 6)); } });
   }
 
   const settled = await Promise.allSettled(jobs.map(function (job) { return job.run(); }));
@@ -537,7 +554,9 @@ async function searchFreeMusic(query, source) {
   });
 
   if (settled.length && settled.every(function (result) { return result.status === 'rejected'; })) {
-    throw new Error('Каталоги сейчас недоступны. Проверьте интернет и попробуйте ещё раз.');
+    const failed = settled.find(function (result) { return result.status === 'rejected'; });
+    const detail = failed && failed.reason && failed.reason.message ? failed.reason.message : '';
+    throw new Error('Каталоги сейчас недоступны: ' + detail);
   }
 
   const seen = {};
